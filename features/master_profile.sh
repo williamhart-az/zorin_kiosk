@@ -13,7 +13,35 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 # Source the environment file
+echo "[DEBUG] Checking for environment file"
+if [ -z "$ENV_FILE" ]; then
+  # Look for the environment file next to kiosk_setup.sh
+  ENV_FILE="$(dirname "$0")/../kiosk_setup.env"
+  echo "[DEBUG] ENV_FILE not defined, using default: $ENV_FILE"
+  
+  # If not found, try looking in the same directory as kiosk_setup.sh
+  if [ ! -f "$ENV_FILE" ]; then
+    PARENT_DIR="$(dirname "$(dirname "$0")")"
+    for file in "$PARENT_DIR"/*.sh; do
+      if [ -f "$file" ] && grep -q "kiosk_setup" "$file"; then
+        ENV_FILE="$(dirname "$file")/kiosk_setup.env"
+        echo "[DEBUG] Looking for kiosk_setup.env next to kiosk_setup.sh: $ENV_FILE"
+        break
+      fi
+    done
+  fi
+fi
+
+echo "[DEBUG] Checking if environment file exists at: $ENV_FILE"
+if [ ! -f "$ENV_FILE" ]; then
+  echo "[ERROR] Environment file not found at $ENV_FILE"
+  echo "[ERROR] Please specify the correct path using the ENV_FILE variable."
+  exit 1
+fi
+
+echo "[DEBUG] Sourcing environment file: $ENV_FILE"
 source "$ENV_FILE"
+echo "[DEBUG] Environment file sourced successfully"
 
 # 14. Create a script to save admin changes to the template directory
 echo "Creating admin changes save script..."
