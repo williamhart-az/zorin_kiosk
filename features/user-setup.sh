@@ -13,6 +13,19 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 # Source the environment file
+if [ -z "$ENV_FILE" ]; then
+  # Default location if ENV_FILE is not defined
+  ENV_FILE="$(dirname "$0")/../config/kiosk.env"
+  echo "ENV_FILE not defined, using default: $ENV_FILE"
+fi
+
+if [ ! -f "$ENV_FILE" ]; then
+  echo "Error: Environment file not found at $ENV_FILE"
+  echo "Please specify the correct path using the ENV_FILE variable."
+  exit 1
+fi
+
+echo "Sourcing environment file: $ENV_FILE"
 source "$ENV_FILE"
 
 # 1. Create kiosk user first
