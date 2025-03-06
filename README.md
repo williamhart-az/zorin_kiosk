@@ -16,7 +16,7 @@ This repository contains scripts to set up a ZorinOS system as a kiosk with desk
 ## Installation
 
 1. Clone this repository:
-git clone https://github.com/yourusername/zorinos-kiosk-setup.git
+git clone https://github.com/williamhart-az/zorinos-kiosk-setup.git
 cd zorinos-kiosk-setup
 2. Review and modify the configuration in `kiosk_setup.env` to match your requirements.
 
