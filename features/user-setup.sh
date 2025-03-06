@@ -448,27 +448,71 @@ EOF
 
 # Set GSettings for auto-login if available
 if command -v gsettings > /dev/null; then
-  echo "[DEBUG] Setting GSettings for auto-login"
-  # Create a temporary script to run gsettings as the kiosk user
+  echo "[DEBUG] Checking available GSettings schemas"
+  
+  # Create a temporary script to check available schemas and set appropriate settings
   GSETTINGS_SCRIPT="/tmp/gsettings_autologin.sh"
-  cat > "$GSETTINGS_SCRIPT" << EOF
+  cat > "$GSETTINGS_SCRIPT" << 'EOF'
 #!/bin/bash
-export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/\$(id -u)/bus
-gsettings set org.gnome.login-screen enable-auto-login true
-gsettings set org.gnome.login-screen auto-login-user "$KIOSK_USERNAME"
+export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus
+
+# Function to safely set gsettings
+safe_gsettings_set() {
+  local schema="$1"
+  local key="$2"
+  local value="$3"
+  
+  # Check if schema exists
+  if gsettings list-schemas | grep -q "^$schema$"; then
+    # Check if key exists in schema
+    if gsettings list-keys "$schema" 2>/dev/null | grep -q "^$key$"; then
+      echo "[DEBUG] Setting $schema $key to $value"
+      gsettings set "$schema" "$key" "$value"
+      return 0
+    else
+      echo "[DEBUG] Key $key not found in schema $schema"
+      return 1
+    fi
+  else
+    echo "[DEBUG] Schema $schema not found"
+    return 1
+  fi
+}
+
+# Try different schemas and keys for auto-login settings
+USERNAME="$1"
+
+# Try GNOME login screen settings
+safe_gsettings_set "org.gnome.login-screen" "enable-auto-login" "true" || echo "[DEBUG] Could not set GNOME auto-login enable"
+safe_gsettings_set "org.gnome.login-screen" "auto-login-user" "$USERNAME" || echo "[DEBUG] Could not set GNOME auto-login user"
+
+# Try Zorin OS specific settings if they exist
+safe_gsettings_set "com.zorin.desktop.login-screen" "enable-auto-login" "true" || echo "[DEBUG] Could not set Zorin auto-login enable"
+safe_gsettings_set "com.zorin.desktop.login-screen" "auto-login-user" "$USERNAME" || echo "[DEBUG] Could not set Zorin auto-login user"
+
+# Try LightDM settings if they exist
+safe_gsettings_set "x.dm.slick-greeter" "auto-login-user" "$USERNAME" || echo "[DEBUG] Could not set LightDM auto-login user"
+safe_gsettings_set "x.dm.slick-greeter" "auto-login-enable" "true" || echo "[DEBUG] Could not set LightDM auto-login enable"
+
+# Try alternative LightDM settings
+safe_gsettings_set "org.gnome.desktop.lockdown" "disable-lock-screen" "true" || echo "[DEBUG] Could not disable lock screen"
+
+echo "[DEBUG] GSettings configuration completed"
 EOF
   chmod +x "$GSETTINGS_SCRIPT"
   
   # Run the script as the kiosk user if possible
   if id "$KIOSK_USERNAME" &>/dev/null; then
     echo "[DEBUG] Running GSettings script as $KIOSK_USERNAME"
-    su - "$KIOSK_USERNAME" -c "$GSETTINGS_SCRIPT" || echo "[WARNING] Failed to run GSettings as $KIOSK_USERNAME"
+    su - "$KIOSK_USERNAME" -c "$GSETTINGS_SCRIPT $KIOSK_USERNAME" || echo "[WARNING] Failed to run GSettings as $KIOSK_USERNAME, but continuing"
   else
     echo "[WARNING] Could not run GSettings as $KIOSK_USERNAME, user may not exist yet"
   fi
   
   # Clean up
   rm -f "$GSETTINGS_SCRIPT"
+else
+  echo "[DEBUG] gsettings command not available, skipping GSettings configuration"
 fi
 
 echo "[DEBUG] AccountsService configuration completed"
