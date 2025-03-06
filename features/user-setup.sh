@@ -257,6 +257,24 @@ for dm in lightdm gdm gdm3 sddm; do
   fi
 done
 
+# If no running display manager was found, try to determine from installed packages
+if [ -z "$RUNNING_DM" ]; then
+  echo "[DEBUG] No running display manager found, checking installed packages"
+  if dpkg -l | grep -q "lightdm"; then
+    RUNNING_DM="lightdm"
+    echo "[DEBUG] LightDM package is installed, assuming it's the display manager"
+  elif dpkg -l | grep -q "gdm3"; then
+    RUNNING_DM="gdm3"
+    echo "[DEBUG] GDM3 package is installed, assuming it's the display manager"
+  elif dpkg -l | grep -q "gdm"; then
+    RUNNING_DM="gdm"
+    echo "[DEBUG] GDM package is installed, assuming it's the display manager"
+  elif dpkg -l | grep -q "sddm"; then
+    RUNNING_DM="sddm"
+    echo "[DEBUG] SDDM package is installed, assuming it's the display manager"
+  fi
+fi
+
 # Configure LightDM for autologin if it's being used (Zorin OS typically uses LightDM)
 echo "[DEBUG] Checking for LightDM"
 if [ -d "/etc/lightdm" ] || [[ "$DM_SERVICE" == *"lightdm"* ]] || [[ "$RUNNING_DM" == "lightdm" ]]; then
@@ -306,6 +324,24 @@ autologin-guest=false
 autologin-user=$KIOSK_USERNAME
 autologin-user-timeout=0
 EOF
+  
+  # Create additional configuration for Zorin OS 17
+  echo "[DEBUG] Creating additional LightDM configuration for Zorin OS 17"
+  cat > /etc/lightdm/lightdm.conf.d/20-zorin-autologin.conf << EOF
+[Seat:*]
+autologin-user=$KIOSK_USERNAME
+autologin-user-timeout=0
+EOF
+
+  # Configure slick-greeter specifically (used by Zorin OS)
+  echo "[DEBUG] Configuring slick-greeter for autologin"
+  mkdir -p /etc/lightdm/slick-greeter.conf.d
+  cat > /etc/lightdm/slick-greeter.conf.d/10-autologin.conf << EOF
+[Greeter]
+automatic-login-user=$KIOSK_USERNAME
+automatic-login=true
+EOF
+
   echo "[DEBUG] LightDM autologin configuration completed"
   
   # Ensure LightDM service is enabled
@@ -416,6 +452,47 @@ if [ -f "/etc/os-release" ] && grep -q "Zorin OS" /etc/os-release; then
       sed -i "s/user-session=zorin/user-session=$ZORIN_SESSION/" /etc/lightdm/lightdm.conf
       
       echo "[DEBUG] LightDM configuration updated with session: $ZORIN_SESSION"
+      
+      # Try to use Zorin OS specific tools if available
+      if command -v zorin-auto-login &> /dev/null; then
+        echo "[DEBUG] Found Zorin OS auto-login tool, using it"
+        zorin-auto-login enable "$KIOSK_USERNAME" || echo "[WARNING] Failed to use zorin-auto-login tool"
+      fi
+    fi
+    
+    # Try to use dconf to set auto-login (Zorin OS 17 specific)
+    if command -v dconf &> /dev/null; then
+      echo "[DEBUG] Using dconf to set auto-login for Zorin OS 17"
+      # Create a temporary script to run dconf as the kiosk user
+      DCONF_SCRIPT="/tmp/dconf_autologin.sh"
+      cat > "$DCONF_SCRIPT" << EOF
+#!/bin/bash
+export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/\$(id -u)/bus
+
+# Try to set auto-login using dconf
+dconf write /org/gnome/login-screen/enable-auto-login true || echo "Failed to set enable-auto-login"
+dconf write /org/gnome/login-screen/auto-login-user "'$KIOSK_USERNAME'" || echo "Failed to set auto-login-user"
+
+# Try Zorin OS specific settings
+dconf write /com/zorin/desktop/auto-login/enabled true || echo "Failed to set Zorin auto-login enabled"
+dconf write /com/zorin/desktop/auto-login/user "'$KIOSK_USERNAME'" || echo "Failed to set Zorin auto-login user"
+
+# Try to disable screen lock
+dconf write /org/gnome/desktop/lockdown/disable-lock-screen true || echo "Failed to disable lock screen"
+dconf write /org/gnome/desktop/screensaver/lock-enabled false || echo "Failed to disable screensaver lock"
+EOF
+      chmod +x "$DCONF_SCRIPT"
+      
+      # Run the script as the kiosk user if possible
+      if id "$KIOSK_USERNAME" &>/dev/null; then
+        echo "[DEBUG] Running dconf script as $KIOSK_USERNAME"
+        su - "$KIOSK_USERNAME" -c "$DCONF_SCRIPT" || echo "[WARNING] Failed to run dconf as $KIOSK_USERNAME, but continuing"
+      else
+        echo "[WARNING] Could not run dconf as $KIOSK_USERNAME, user may not exist yet"
+      fi
+      
+      # Clean up
+      rm -f "$DCONF_SCRIPT"
     fi
   fi
 fi
@@ -444,7 +521,27 @@ Language=
 XSession=$ZORIN_SESSION
 SystemAccount=false
 Icon=/usr/share/pixmaps/faces/user-generic.png
+AutomaticLogin=true
 EOF
+
+# Try to use loginctl to enable auto-login
+if command -v loginctl > /dev/null; then
+  echo "[DEBUG] Using loginctl to enable auto-login"
+  loginctl enable-linger "$KIOSK_USERNAME" || echo "[WARNING] Failed to enable linger for $KIOSK_USERNAME"
+  
+  # For systemd-based login managers
+  if [ -d "/etc/systemd/system" ]; then
+    echo "[DEBUG] Creating systemd auto-login override"
+    mkdir -p /etc/systemd/system/getty@tty1.service.d/
+    cat > /etc/systemd/system/getty@tty1.service.d/override.conf << EOF
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --autologin $KIOSK_USERNAME --noclear %I \$TERM
+EOF
+    systemctl daemon-reload
+    echo "[DEBUG] Systemd auto-login override created"
+  fi
+fi
 
 # Set GSettings for auto-login if available
 if command -v gsettings > /dev/null; then
@@ -497,6 +594,13 @@ safe_gsettings_set "x.dm.slick-greeter" "auto-login-enable" "true" || echo "[DEB
 # Try alternative LightDM settings
 safe_gsettings_set "org.gnome.desktop.lockdown" "disable-lock-screen" "true" || echo "[DEBUG] Could not disable lock screen"
 
+# Try to disable screen lock and screensaver
+safe_gsettings_set "org.gnome.desktop.screensaver" "lock-enabled" "false" || echo "[DEBUG] Could not disable screensaver lock"
+safe_gsettings_set "org.gnome.desktop.screensaver" "idle-activation-enabled" "false" || echo "[DEBUG] Could not disable screensaver activation"
+
+# Try to disable user switching
+safe_gsettings_set "org.gnome.desktop.lockdown" "disable-user-switching" "true" || echo "[DEBUG] Could not disable user switching"
+
 echo "[DEBUG] GSettings configuration completed"
 EOF
   chmod +x "$GSETTINGS_SCRIPT"
@@ -515,6 +619,117 @@ else
   echo "[DEBUG] gsettings command not available, skipping GSettings configuration"
 fi
 
+# Create a systemd user service for the kiosk user to ensure auto-login settings persist
+echo "[DEBUG] Creating systemd user service for auto-login persistence"
+mkdir -p /home/$KIOSK_USERNAME/.config/systemd/user/
+cat > /home/$KIOSK_USERNAME/.config/systemd/user/kiosk-autologin.service << EOF
+[Unit]
+Description=Kiosk Auto-Login Service
+After=graphical.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'dconf write /org/gnome/desktop/lockdown/disable-lock-screen true || true'
+ExecStart=/bin/sh -c 'dconf write /org/gnome/desktop/screensaver/lock-enabled false || true'
+ExecStart=/bin/sh -c 'dconf write /org/gnome/login-screen/enable-auto-login true || true'
+ExecStart=/bin/sh -c 'dconf write /org/gnome/login-screen/auto-login-user "'$KIOSK_USERNAME'" || true'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=default.target
+EOF
+
+# Set proper ownership
+chown -R $KIOSK_USERNAME:$KIOSK_USERNAME /home/$KIOSK_USERNAME/.config/
+
+# Enable the service for the user
+if command -v systemctl > /dev/null; then
+  echo "[DEBUG] Enabling kiosk-autologin service for user"
+  su - $KIOSK_USERNAME -c "XDG_RUNTIME_DIR=/run/user/$(id -u $KIOSK_USERNAME) systemctl --user enable kiosk-autologin.service" || echo "[WARNING] Failed to enable kiosk-autologin service"
+fi
+
 echo "[DEBUG] AccountsService configuration completed"
+
+# Create a script to verify and fix auto-login on each boot
+echo "[DEBUG] Creating auto-login verification script"
+cat > /usr/local/sbin/verify-autologin.sh << 'EOF'
+#!/bin/bash
+
+# Script to verify and fix auto-login settings on boot
+KIOSK_USER="$1"
+if [ -z "$KIOSK_USER" ]; then
+  echo "Usage: $0 <username>"
+  exit 1
+fi
+
+# Check LightDM configuration
+if [ -d "/etc/lightdm" ]; then
+  # Ensure auto-login is configured in lightdm.conf
+  if [ -f "/etc/lightdm/lightdm.conf" ]; then
+    if ! grep -q "autologin-user=$KIOSK_USER" /etc/lightdm/lightdm.conf; then
+      echo "Fixing LightDM auto-login configuration..."
+      if grep -q "\[Seat:\*\]" /etc/lightdm/lightdm.conf; then
+        sed -i '/^\[Seat:\*\]/a autologin-user='$KIOSK_USER'\nautologin-user-timeout=0' /etc/lightdm/lightdm.conf
+      else
+        echo -e "[Seat:*]\nautologin-user=$KIOSK_USER\nautologin-user-timeout=0" >> /etc/lightdm/lightdm.conf
+      fi
+    fi
+  fi
+  
+  # Ensure auto-login is configured in lightdm.conf.d
+  mkdir -p /etc/lightdm/lightdm.conf.d
+  if [ ! -f "/etc/lightdm/lightdm.conf.d/12-autologin.conf" ]; then
+    echo "Creating LightDM auto-login configuration file..."
+    echo -e "[Seat:*]\nautologin-user=$KIOSK_USER\nautologin-user-timeout=0" > /etc/lightdm/lightdm.conf.d/12-autologin.conf
+  fi
+fi
+
+# Check GDM configuration
+if [ -d "/etc/gdm3" ]; then
+  if [ -f "/etc/gdm3/custom.conf" ]; then
+    if ! grep -q "AutomaticLoginEnable=true" /etc/gdm3/custom.conf; then
+      echo "Fixing GDM auto-login configuration..."
+      if grep -q "^\[daemon\]" /etc/gdm3/custom.conf; then
+        sed -i '/^\[daemon\]/a AutomaticLoginEnable=true\nAutomaticLogin='$KIOSK_USER'' /etc/gdm3/custom.conf
+      else
+        echo -e "[daemon]\nAutomaticLoginEnable=true\nAutomaticLogin=$KIOSK_USER" >> /etc/gdm3/custom.conf
+      fi
+    fi
+  else
+    echo "Creating GDM auto-login configuration file..."
+    echo -e "[daemon]\nAutomaticLoginEnable=true\nAutomaticLogin=$KIOSK_USER" > /etc/gdm3/custom.conf
+  fi
+fi
+
+# Check AccountsService configuration
+mkdir -p /var/lib/AccountsService/users
+if [ ! -f "/var/lib/AccountsService/users/$KIOSK_USER" ] || ! grep -q "AutomaticLogin=true" "/var/lib/AccountsService/users/$KIOSK_USER"; then
+  echo "Fixing AccountsService auto-login configuration..."
+  echo -e "[User]\nLanguage=\nXSession=zorin\nSystemAccount=false\nIcon=/usr/share/pixmaps/faces/user-generic.png\nAutomaticLogin=true" > "/var/lib/AccountsService/users/$KIOSK_USER"
+fi
+
+echo "Auto-login verification completed."
+EOF
+
+chmod +x /usr/local/sbin/verify-autologin.sh
+
+# Create a systemd service to run the verification script on boot
+echo "[DEBUG] Creating systemd service for auto-login verification"
+cat > /etc/systemd/system/verify-autologin.service << EOF
+[Unit]
+Description=Verify and fix auto-login settings
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/verify-autologin.sh $KIOSK_USERNAME
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable the service
+systemctl enable verify-autologin.service
 
 echo "[DEBUG] User setup script completed successfully"
