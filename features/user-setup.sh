@@ -237,17 +237,54 @@ if [ -f "/etc/systemd/system/display-manager.service" ]; then
   echo "[DEBUG] Detected display manager service: $DM_SERVICE"
 else
   echo "[DEBUG] No display manager service found at /etc/systemd/system/display-manager.service"
-  echo "[DEBUG] Will try to detect display manager by directory presence"
+  # Try alternative location for Zorin OS 17
+  if [ -f "/lib/systemd/system/display-manager.service" ]; then
+    DM_SERVICE=$(readlink -f /lib/systemd/system/display-manager.service)
+    echo "[DEBUG] Detected display manager service at alternative location: $DM_SERVICE"
+  else
+    echo "[DEBUG] Will try to detect display manager by directory presence"
+  fi
 fi
 
-# Configure LightDM for autologin if it's being used
+# Determine which display manager is actually running
+echo "[DEBUG] Checking which display manager is running"
+RUNNING_DM=""
+for dm in lightdm gdm gdm3 sddm; do
+  if systemctl is-active --quiet $dm.service; then
+    RUNNING_DM=$dm
+    echo "[DEBUG] Found running display manager: $RUNNING_DM"
+    break
+  fi
+done
+
+# Configure LightDM for autologin if it's being used (Zorin OS typically uses LightDM)
 echo "[DEBUG] Checking for LightDM"
-if [ -d "/etc/lightdm" ] || [[ "$DM_SERVICE" == *"lightdm"* ]]; then
+if [ -d "/etc/lightdm" ] || [[ "$DM_SERVICE" == *"lightdm"* ]] || [[ "$RUNNING_DM" == "lightdm" ]]; then
   echo "[DEBUG] LightDM detected, configuring for autologin"
   echo "[DEBUG] Creating /etc/lightdm directory if it doesn't exist"
   mkdir -p /etc/lightdm
-  echo "[DEBUG] Creating main LightDM configuration file"
-  cat > /etc/lightdm/lightdm.conf << EOF
+  
+  # Backup existing configuration if it exists
+  if [ -f "/etc/lightdm/lightdm.conf" ]; then
+    echo "[DEBUG] Backing up existing LightDM configuration"
+    cp /etc/lightdm/lightdm.conf /etc/lightdm/lightdm.conf.bak
+  fi
+  
+  # Check if the file already has autologin settings
+  if [ -f "/etc/lightdm/lightdm.conf" ] && grep -q "\[Seat:*\]" /etc/lightdm/lightdm.conf; then
+    echo "[DEBUG] Updating existing LightDM configuration"
+    # Update existing configuration
+    sed -i '/^\[Seat:\*\]/,/^\[/ s/^autologin-user=.*/autologin-user='$KIOSK_USERNAME'/' /etc/lightdm/lightdm.conf
+    sed -i '/^\[Seat:\*\]/,/^\[/ s/^autologin-user-timeout=.*/autologin-user-timeout=0/' /etc/lightdm/lightdm.conf
+    
+    # Add settings if they don't exist
+    if ! grep -q "autologin-user=" /etc/lightdm/lightdm.conf; then
+      sed -i '/^\[Seat:\*\]/a autologin-user='$KIOSK_USERNAME'\nautologin-user-timeout=0' /etc/lightdm/lightdm.conf
+    fi
+  else
+    echo "[DEBUG] Creating new LightDM configuration file"
+    # Create new configuration file
+    cat > /etc/lightdm/lightdm.conf << EOF
 [Seat:*]
 autologin-guest=false
 autologin-user=$KIOSK_USERNAME
@@ -256,7 +293,8 @@ autologin-session=zorin
 user-session=zorin
 greeter-session=slick-greeter
 EOF
-  echo "[DEBUG] Main LightDM configuration file created"
+  fi
+  echo "[DEBUG] Main LightDM configuration file created/updated"
 
   # Create a separate autologin configuration file
   echo "[DEBUG] Creating LightDM autologin configuration directory"
@@ -267,18 +305,19 @@ EOF
 autologin-guest=false
 autologin-user=$KIOSK_USERNAME
 autologin-user-timeout=0
-autologin-session=zorin
-user-session=zorin
-greeter-session=slick-greeter
 EOF
   echo "[DEBUG] LightDM autologin configuration completed"
+  
+  # Ensure LightDM service is enabled
+  echo "[DEBUG] Ensuring LightDM service is enabled"
+  systemctl enable lightdm.service
 else
   echo "[DEBUG] LightDM not detected"
 fi
 
 # Configure GDM for autologin if it's being used
 echo "[DEBUG] Checking for GDM"
-if [ -d "/etc/gdm3" ] || [[ "$DM_SERVICE" == *"gdm"* ]]; then
+if [ -d "/etc/gdm3" ] || [[ "$DM_SERVICE" == *"gdm"* ]] || [[ "$RUNNING_DM" == "gdm"* ]]; then
   echo "[DEBUG] GDM detected, configuring for autologin"
   echo "[DEBUG] Creating /etc/gdm3 directory if it doesn't exist"
   mkdir -p /etc/gdm3
@@ -288,13 +327,19 @@ if [ -d "/etc/gdm3" ] || [[ "$DM_SERVICE" == *"gdm"* ]]; then
     echo "[DEBUG] Backup created at /etc/gdm3/custom.conf.bak"
     
     echo "[DEBUG] Updating GDM configuration"
-    sed -i '/\[daemon\]/,/^\[/ s/^AutomaticLoginEnable=.*/AutomaticLoginEnable=true/' /etc/gdm3/custom.conf
-    sed -i '/\[daemon\]/,/^\[/ s/^AutomaticLogin=.*/AutomaticLogin='$KIOSK_USERNAME'/' /etc/gdm3/custom.conf
-    
-    echo "[DEBUG] Checking if autologin settings exist in GDM configuration"
-    if ! grep -q "AutomaticLoginEnable" /etc/gdm3/custom.conf; then
-      echo "[DEBUG] Autologin settings not found, adding them"
-      sed -i '/\[daemon\]/a AutomaticLoginEnable=true\nAutomaticLogin='$KIOSK_USERNAME'' /etc/gdm3/custom.conf
+    # Check if [daemon] section exists
+    if grep -q "^\[daemon\]" /etc/gdm3/custom.conf; then
+      echo "[DEBUG] [daemon] section found, updating settings"
+      sed -i '/^\[daemon\]/,/^\[/ s/^AutomaticLoginEnable=.*/AutomaticLoginEnable=true/' /etc/gdm3/custom.conf
+      sed -i '/^\[daemon\]/,/^\[/ s/^AutomaticLogin=.*/AutomaticLogin='$KIOSK_USERNAME'/' /etc/gdm3/custom.conf
+      
+      # Add settings if they don't exist
+      if ! grep -q "AutomaticLoginEnable" /etc/gdm3/custom.conf; then
+        sed -i '/^\[daemon\]/a AutomaticLoginEnable=true\nAutomaticLogin='$KIOSK_USERNAME'' /etc/gdm3/custom.conf
+      fi
+    else
+      echo "[DEBUG] [daemon] section not found, adding it"
+      echo -e "[daemon]\nAutomaticLoginEnable=true\nAutomaticLogin=$KIOSK_USERNAME" >> /etc/gdm3/custom.conf
     fi
     echo "[DEBUG] GDM configuration updated"
   else
@@ -307,13 +352,21 @@ EOF
     echo "[DEBUG] New GDM configuration created"
   fi
   echo "[DEBUG] GDM autologin configuration completed"
+  
+  # Ensure GDM service is enabled
+  echo "[DEBUG] Ensuring GDM service is enabled"
+  if [ "$RUNNING_DM" == "gdm" ]; then
+    systemctl enable gdm.service
+  elif [ "$RUNNING_DM" == "gdm3" ]; then
+    systemctl enable gdm3.service
+  fi
 else
   echo "[DEBUG] GDM not detected"
 fi
 
 # Configure SDDM for autologin if it's being used
 echo "[DEBUG] Checking for SDDM"
-if [ -d "/etc/sddm.conf.d" ] || [[ "$DM_SERVICE" == *"sddm"* ]]; then
+if [ -d "/etc/sddm.conf.d" ] || [[ "$DM_SERVICE" == *"sddm"* ]] || [[ "$RUNNING_DM" == "sddm" ]]; then
   echo "[DEBUG] SDDM detected, configuring for autologin"
   echo "[DEBUG] Creating SDDM configuration directory"
   mkdir -p /etc/sddm.conf.d
@@ -324,22 +377,100 @@ User=$KIOSK_USERNAME
 Session=zorin
 EOF
   echo "[DEBUG] SDDM autologin configuration completed"
+  
+  # Ensure SDDM service is enabled
+  echo "[DEBUG] Ensuring SDDM service is enabled"
+  systemctl enable sddm.service
 else
   echo "[DEBUG] SDDM not detected"
+fi
+
+# Additional check for Zorin OS 17 specific configuration
+echo "[DEBUG] Checking for Zorin OS 17 specific configuration"
+if [ -f "/etc/os-release" ] && grep -q "Zorin OS" /etc/os-release; then
+  ZORIN_VERSION=$(grep "VERSION_ID" /etc/os-release | cut -d= -f2 | tr -d '"')
+  echo "[DEBUG] Detected Zorin OS version: $ZORIN_VERSION"
+  
+  # For Zorin OS 17, ensure we're using the correct session name
+  if [[ "$ZORIN_VERSION" == "17"* ]]; then
+    echo "[DEBUG] Applying Zorin OS 17 specific configuration"
+    
+    # Update LightDM configuration with correct session name if LightDM is used
+    if [ -d "/etc/lightdm" ] || [[ "$DM_SERVICE" == *"lightdm"* ]] || [[ "$RUNNING_DM" == "lightdm" ]]; then
+      echo "[DEBUG] Updating LightDM configuration with correct session name for Zorin OS 17"
+      
+      # Get the correct session name
+      ZORIN_SESSION="zorin"
+      if [ -d "/usr/share/xsessions" ]; then
+        for session in /usr/share/xsessions/*.desktop; do
+          if grep -q "Zorin" "$session"; then
+            ZORIN_SESSION=$(basename "$session" .desktop)
+            echo "[DEBUG] Found Zorin session: $ZORIN_SESSION"
+            break
+          fi
+        done
+      fi
+      
+      # Update the session name in the configuration
+      sed -i "s/autologin-session=zorin/autologin-session=$ZORIN_SESSION/" /etc/lightdm/lightdm.conf
+      sed -i "s/user-session=zorin/user-session=$ZORIN_SESSION/" /etc/lightdm/lightdm.conf
+      
+      echo "[DEBUG] LightDM configuration updated with session: $ZORIN_SESSION"
+    fi
+  fi
 fi
 
 # 12. Configure AccountsService for autologin
 echo "[DEBUG] Feature #12: Configuring AccountsService for autologin"
 echo "[DEBUG] Creating AccountsService users directory"
 mkdir -p /var/lib/AccountsService/users
-echo "[DEBUG] Creating AccountsService configuration for $KIOSK_USERNAME"
+
+# Determine the correct session name for Zorin OS
+ZORIN_SESSION="zorin"
+if [ -d "/usr/share/xsessions" ]; then
+  for session in /usr/share/xsessions/*.desktop; do
+    if grep -q "Zorin" "$session"; then
+      ZORIN_SESSION=$(basename "$session" .desktop)
+      echo "[DEBUG] Found Zorin session for AccountsService: $ZORIN_SESSION"
+      break
+    fi
+  done
+fi
+
+echo "[DEBUG] Creating AccountsService configuration for $KIOSK_USERNAME with session $ZORIN_SESSION"
 cat > /var/lib/AccountsService/users/$KIOSK_USERNAME << EOF
 [User]
 Language=
-XSession=zorin
+XSession=$ZORIN_SESSION
 SystemAccount=false
 Icon=/usr/share/pixmaps/faces/user-generic.png
 EOF
+
+# Set GSettings for auto-login if available
+if command -v gsettings > /dev/null; then
+  echo "[DEBUG] Setting GSettings for auto-login"
+  # Create a temporary script to run gsettings as the kiosk user
+  GSETTINGS_SCRIPT="/tmp/gsettings_autologin.sh"
+  cat > "$GSETTINGS_SCRIPT" << EOF
+#!/bin/bash
+export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/\$(id -u)/bus
+gsettings set org.gnome.login-screen enable-auto-login true
+gsettings set org.gnome.login-screen auto-login-user "$KIOSK_USERNAME"
+EOF
+  chmod +x "$GSETTINGS_SCRIPT"
+  
+  # Run the script as the kiosk user if possible
+  if id "$KIOSK_USERNAME" &>/dev/null; then
+    echo "[DEBUG] Running GSettings script as $KIOSK_USERNAME"
+    su - "$KIOSK_USERNAME" -c "$GSETTINGS_SCRIPT" || echo "[WARNING] Failed to run GSettings as $KIOSK_USERNAME"
+  else
+    echo "[WARNING] Could not run GSettings as $KIOSK_USERNAME, user may not exist yet"
+  fi
+  
+  # Clean up
+  rm -f "$GSETTINGS_SCRIPT"
+fi
+
 echo "[DEBUG] AccountsService configuration completed"
 
 echo "[DEBUG] User setup script completed successfully"
