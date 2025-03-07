@@ -47,39 +47,127 @@ echo "[DEBUG] Environment file sourced successfully"
 echo "Creating screen blanking prevention script..."
 SCREEN_SCRIPT="$OPT_KIOSK_DIR/disable_screensaver.sh"
 
-cat > "$SCREEN_SCRIPT" << EOF
+# Check if the script already exists (might have been created by user-setup.sh)
+if [ ! -f "$SCREEN_SCRIPT" ]; then
+  cat > "$SCREEN_SCRIPT" << 'EOF'
 #!/bin/bash
 
-# Script to disable screen blanking and prevent display from turning off
-# Display timeout set to $DISPLAY_TIMEOUT seconds ($(($DISPLAY_TIMEOUT/60)) minutes)
+# Script to disable screen blanking and screen locking for Zorin OS 17 kiosk mode
+# This script uses multiple methods to ensure screen blanking is disabled
 
-# Disable DPMS (Energy Star) features
-xset -dpms
+# Log file for debugging
+LOGFILE="/tmp/disable_screensaver.log"
+echo "$(date): Starting screen blanking prevention script" > "$LOGFILE"
 
-# Disable screen saver
-xset s off
+# Method 1: Use xset to disable DPMS and screen blanking
+if command -v xset &> /dev/null; then
+    echo "$(date): Using xset to disable DPMS and screen blanking" >> "$LOGFILE"
+    xset s off -dpms
+    xset s noblank
+    xset -dpms
+    echo "$(date): xset commands executed" >> "$LOGFILE"
+else
+    echo "$(date): xset command not found" >> "$LOGFILE"
+fi
 
-# Set screen timeout (using the variable from the main script)
-xset s $DISPLAY_TIMEOUT $DISPLAY_TIMEOUT
+# Method 2: Use gsettings to disable screen blanking and locking
+if command -v gsettings &> /dev/null; then
+    echo "$(date): Using gsettings to disable screen blanking and locking" >> "$LOGFILE"
+    
+    # Disable screen lock
+    gsettings set org.gnome.desktop.lockdown disable-lock-screen true
+    
+    # Disable screensaver
+    gsettings set org.gnome.desktop.session idle-delay 0
+    gsettings set org.gnome.desktop.screensaver lock-enabled false
+    gsettings set org.gnome.desktop.screensaver idle-activation-enabled false
+    
+    # Disable screen dimming
+    gsettings set org.gnome.settings-daemon.plugins.power idle-dim false
+    
+    # Set power settings to never blank screen
+    gsettings set org.gnome.settings-daemon.plugins.power sleep-display-ac 0
+    gsettings set org.gnome.settings-daemon.plugins.power sleep-display-battery 0
+    
+    # Disable automatic suspend
+    gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type 'nothing'
+    gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-battery-type 'nothing'
+    
+    echo "$(date): gsettings commands executed" >> "$LOGFILE"
+else
+    echo "$(date): gsettings command not found" >> "$LOGFILE"
+fi
 
-# Disable screen blanking
-xset s noexpose
-xset s noblank
+# Method 3: Use dconf directly (for Zorin OS 17)
+if command -v dconf &> /dev/null; then
+    echo "$(date): Using dconf to disable screen blanking and locking" >> "$LOGFILE"
+    
+    # Disable screen lock
+    dconf write /org/gnome/desktop/lockdown/disable-lock-screen true
+    
+    # Disable screensaver
+    dconf write /org/gnome/desktop/session/idle-delay "uint32 0"
+    dconf write /org/gnome/desktop/screensaver/lock-enabled false
+    dconf write /org/gnome/desktop/screensaver/idle-activation-enabled false
+    
+    # Disable screen dimming
+    dconf write /org/gnome/settings-daemon/plugins/power/idle-dim false
+    
+    # Set power settings to never blank screen
+    dconf write /org/gnome/settings-daemon/plugins/power/sleep-display-ac "uint32 0"
+    dconf write /org/gnome/settings-daemon/plugins/power/sleep-display-battery "uint32 0"
+    
+    # Disable automatic suspend
+    dconf write /org/gnome/settings-daemon/plugins/power/sleep-inactive-ac-type "'nothing'"
+    dconf write /org/gnome/settings-daemon/plugins/power/sleep-inactive-battery-type "'nothing'"
+    
+    # Zorin OS specific settings (if they exist)
+    dconf write /com/zorin/desktop/screensaver/lock-enabled false 2>/dev/null || true
+    dconf write /com/zorin/desktop/session/idle-delay "uint32 0" 2>/dev/null || true
+    
+    echo "$(date): dconf commands executed" >> "$LOGFILE"
+else
+    echo "$(date): dconf command not found" >> "$LOGFILE"
+fi
 
-# Log that the script has run
-echo "\$(date): Screen blanking disabled, timeout set to $(($DISPLAY_TIMEOUT/60)) minutes." >> ~/screen_settings.log
+# Method 4: Create a systemd inhibitor to prevent screen blanking
+if command -v systemd-inhibit &> /dev/null; then
+    echo "$(date): Using systemd-inhibit to prevent screen blanking" >> "$LOGFILE"
+    # Run a small sleep command that will keep the inhibitor active
+    systemd-inhibit --what=idle:sleep:handle-lid-switch --who="Kiosk Mode" --why="Prevent screen blanking in kiosk mode" sleep infinity &
+    echo "$(date): systemd-inhibit started with PID $!" >> "$LOGFILE"
+else
+    echo "$(date): systemd-inhibit command not found" >> "$LOGFILE"
+fi
 
-# Keep the script running to maintain settings
-while true; do
-  # Refresh settings every 5 minutes to ensure they stay active
-  sleep 300
-  xset -dpms
-  xset s off
-  xset s $DISPLAY_TIMEOUT $DISPLAY_TIMEOUT
-  xset s noexpose
-  xset s noblank
-done
+# Method 5: Use a loop to simulate user activity (last resort)
+echo "$(date): Starting activity simulation loop" >> "$LOGFILE"
+(
+    while true; do
+        # Simulate user activity every 60 seconds
+        if command -v xdotool &> /dev/null; then
+            # Move mouse 1 pixel right and then back
+            xdotool mousemove_relative -- 1 0
+            sleep 1
+            xdotool mousemove_relative -- -1 0
+            echo "$(date): Simulated mouse movement" >> "$LOGFILE"
+        else
+            # If xdotool is not available, try to use DISPLAY to trigger activity
+            if [ -n "$DISPLAY" ]; then
+                # Try to use xset to reset the screensaver timer
+                xset s reset 2>/dev/null || true
+            fi
+        fi
+        sleep 60
+    done
+) &
+
+echo "$(date): Screen blanking prevention script completed" >> "$LOGFILE"
 EOF
+  echo "Created comprehensive screen blanking prevention script for Zorin OS 17."
+else
+  echo "Screen blanking prevention script already exists, skipping creation."
+fi
 
 chmod +x "$SCREEN_SCRIPT"
 
