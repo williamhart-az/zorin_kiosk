@@ -359,6 +359,219 @@ echo "Copying autostart entries to kiosk user's home directory..."
 cp -r "$TEMPLATE_DIR/.config/autostart/"* "/home/$KIOSK_USERNAME/.config/autostart/"
 chown -R "$KIOSK_USERNAME:$KIOSK_USERNAME" "/home/$KIOSK_USERNAME/.config/autostart/"
 
+# Create a persistent dconf settings script
+echo "Creating persistent dconf settings script..."
+PERSISTENT_DCONF_SCRIPT="$OPT_KIOSK_DIR/persistent_dconf_settings.sh"
+
+cat > "$PERSISTENT_DCONF_SCRIPT" << 'EOF'
+#!/bin/bash
+
+# Script to apply persistent dconf settings for the kiosk user
+# This script will be run on boot and after user login to ensure settings persist
+
+# Log file for debugging
+LOGFILE="/var/log/kiosk-dconf-settings.log"
+echo "$(date): Starting persistent dconf settings script" > "$LOGFILE"
+
+# Get the kiosk username from the first argument or use a default
+KIOSK_USERNAME="$1"
+if [ -z "$KIOSK_USERNAME" ]; then
+    echo "$(date): No username provided, exiting" >> "$LOGFILE"
+    exit 1
+fi
+
+echo "$(date): Setting persistent dconf settings for user $KIOSK_USERNAME" >> "$LOGFILE"
+
+# Function to safely write dconf settings for a user
+apply_dconf_settings() {
+    local username="$1"
+    local uid=$(id -u "$username" 2>/dev/null)
+    
+    if [ -z "$uid" ]; then
+        echo "$(date): User $username does not exist" >> "$LOGFILE"
+        return 1
+    fi
+    
+    # Create a temporary script to run as the user
+    local tmp_script="/tmp/dconf_settings_$username.sh"
+    cat > "$tmp_script" << 'INNEREOF'
+#!/bin/bash
+# Get the user's dbus address or set a default
+if [ -z "$DBUS_SESSION_BUS_ADDRESS" ]; then
+    export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u)/bus"
+fi
+
+# Apply critical settings using both gsettings and dconf
+# Disable screen blanking
+gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
+dconf write /org/gnome/desktop/session/idle-delay "uint32 0" 2>/dev/null || true
+
+# Disable screen lock
+gsettings set org.gnome.desktop.lockdown disable-lock-screen true 2>/dev/null || true
+dconf write /org/gnome/desktop/lockdown/disable-lock-screen true 2>/dev/null || true
+
+# Disable screensaver
+gsettings set org.gnome.desktop.screensaver lock-enabled false 2>/dev/null || true
+dconf write /org/gnome/desktop/screensaver/lock-enabled false 2>/dev/null || true
+gsettings set org.gnome.desktop.screensaver idle-activation-enabled false 2>/dev/null || true
+dconf write /org/gnome/desktop/screensaver/idle-activation-enabled false 2>/dev/null || true
+
+# Disable screen dimming
+gsettings set org.gnome.settings-daemon.plugins.power idle-dim false 2>/dev/null || true
+dconf write /org/gnome/settings-daemon/plugins/power/idle-dim false 2>/dev/null || true
+
+# Set power settings to never blank screen
+gsettings set org.gnome.settings-daemon.plugins.power sleep-display-ac 0 2>/dev/null || true
+dconf write /org/gnome/settings-daemon/plugins/power/sleep-display-ac "uint32 0" 2>/dev/null || true
+gsettings set org.gnome.settings-daemon.plugins.power sleep-display-battery 0 2>/dev/null || true
+dconf write /org/gnome/settings-daemon/plugins/power/sleep-display-battery "uint32 0" 2>/dev/null || true
+
+# Disable automatic suspend
+gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type 'nothing' 2>/dev/null || true
+dconf write /org/gnome/settings-daemon/plugins/power/sleep-inactive-ac-type "'nothing'" 2>/dev/null || true
+gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-battery-type 'nothing' 2>/dev/null || true
+dconf write /org/gnome/settings-daemon/plugins/power/sleep-inactive-battery-type "'nothing'" 2>/dev/null || true
+
+# Zorin OS specific settings (if they exist)
+gsettings set com.zorin.desktop.screensaver lock-enabled false 2>/dev/null || true
+dconf write /com/zorin/desktop/screensaver/lock-enabled false 2>/dev/null || true
+gsettings set com.zorin.desktop.session idle-delay 0 2>/dev/null || true
+dconf write /com/zorin/desktop/session/idle-delay "uint32 0" 2>/dev/null || true
+INNEREOF
+    
+    chmod +x "$tmp_script"
+    
+    # Run the script as the user
+    echo "$(date): Running dconf settings script as $username" >> "$LOGFILE"
+    if [ "$username" = "root" ]; then
+        bash "$tmp_script" >> "$LOGFILE" 2>&1
+    else
+        su - "$username" -c "$tmp_script" >> "$LOGFILE" 2>&1
+    fi
+    
+    # Clean up
+    rm -f "$tmp_script"
+    
+    echo "$(date): Completed dconf settings for $username" >> "$LOGFILE"
+    return 0
+}
+
+# Apply settings for the kiosk user
+apply_dconf_settings "$KIOSK_USERNAME"
+
+# Create a system-wide override for the idle-delay setting
+echo "$(date): Creating system-wide dconf override for idle-delay" >> "$LOGFILE"
+
+# Create dconf profile directory
+mkdir -p /etc/dconf/profile
+echo "$(date): Created dconf profile directory" >> "$LOGFILE"
+
+# Create a system profile
+cat > /etc/dconf/profile/user << EOF
+user-db:user
+system-db:local
+EOF
+echo "$(date): Created dconf user profile" >> "$LOGFILE"
+
+# Create the local database directory
+mkdir -p /etc/dconf/db/local.d
+echo "$(date): Created dconf local database directory" >> "$LOGFILE"
+
+# Create the settings file
+cat > /etc/dconf/db/local.d/00-kiosk << EOF
+# Kiosk mode settings
+
+[org/gnome/desktop/session]
+idle-delay=uint32 0
+
+[org/gnome/desktop/screensaver]
+lock-enabled=false
+idle-activation-enabled=false
+
+[org/gnome/desktop/lockdown]
+disable-lock-screen=true
+
+[org/gnome/settings-daemon/plugins/power]
+idle-dim=false
+sleep-display-ac=uint32 0
+sleep-display-battery=uint32 0
+sleep-inactive-ac-type='nothing'
+sleep-inactive-battery-type='nothing'
+
+[com/zorin/desktop/screensaver]
+lock-enabled=false
+
+[com/zorin/desktop/session]
+idle-delay=uint32 0
+EOF
+echo "$(date): Created dconf settings file" >> "$LOGFILE"
+
+# Create locks directory
+mkdir -p /etc/dconf/db/local.d/locks
+echo "$(date): Created dconf locks directory" >> "$LOGFILE"
+
+# Create locks file to prevent user from changing these settings
+cat > /etc/dconf/db/local.d/locks/kiosk << EOF
+/org/gnome/desktop/session/idle-delay
+/org/gnome/desktop/screensaver/lock-enabled
+/org/gnome/desktop/screensaver/idle-activation-enabled
+/org/gnome/desktop/lockdown/disable-lock-screen
+/org/gnome/settings-daemon/plugins/power/idle-dim
+/org/gnome/settings-daemon/plugins/power/sleep-display-ac
+/org/gnome/settings-daemon/plugins/power/sleep-display-battery
+/org/gnome/settings-daemon/plugins/power/sleep-inactive-ac-type
+/org/gnome/settings-daemon/plugins/power/sleep-inactive-battery-type
+EOF
+echo "$(date): Created dconf locks file" >> "$LOGFILE"
+
+# Update the dconf database
+dconf update
+echo "$(date): Updated dconf database" >> "$LOGFILE"
+
+echo "$(date): Persistent dconf settings script completed successfully" >> "$LOGFILE"
+EOF
+
+chmod +x "$PERSISTENT_DCONF_SCRIPT"
+echo "Created persistent dconf settings script."
+
+# Create a systemd service to apply persistent dconf settings on boot
+echo "Creating systemd service for persistent dconf settings..."
+DCONF_SERVICE="/etc/systemd/system/kiosk-dconf-settings.service"
+
+cat > "$DCONF_SERVICE" << EOF
+[Unit]
+Description=Apply Persistent Dconf Settings for Kiosk
+After=local-fs.target
+Before=display-manager.service
+
+[Service]
+Type=oneshot
+ExecStart=$PERSISTENT_DCONF_SCRIPT $KIOSK_USERNAME
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable the service
+systemctl enable kiosk-dconf-settings.service
+
+# Create a user-level systemd service to apply settings after login
+mkdir -p "$TEMPLATE_DIR/.config/systemd/user"
+cat > "$TEMPLATE_DIR/.config/systemd/user/kiosk-user-settings.service" << EOF
+[Unit]
+Description=Apply Kiosk User Settings
+After=graphical-session.target
+
+[Service]
+Type=oneshot
+ExecStart=$PERSISTENT_DCONF_SCRIPT $KIOSK_USERNAME
+RemainAfterExit=yes
+
+[Install]
+WantedBy=graphical-session.target
+EOF
+
 # 18. Create a systemd service to initialize kiosk home directory after tmpfs mount
 echo "Creating systemd service for kiosk home initialization..."
 KIOSK_INIT_SERVICE="/etc/systemd/system/kiosk-home-init.service"
@@ -371,7 +584,7 @@ Before=display-manager.service
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c "mkdir -p /home/$KIOSK_USERNAME/.config/autostart && cp -r $TEMPLATE_DIR/.config/autostart/* /home/$KIOSK_USERNAME/.config/autostart/ && mkdir -p /home/$KIOSK_USERNAME/Desktop && cp -r $TEMPLATE_DIR/Desktop/* /home/$KIOSK_USERNAME/Desktop/ 2>/dev/null || true && mkdir -p /home/$KIOSK_USERNAME/Documents && cp -r $TEMPLATE_DIR/Documents/* /home/$KIOSK_USERNAME/Documents/ 2>/dev/null || true && chown -R $KIOSK_USERNAME:$KIOSK_USERNAME /home/$KIOSK_USERNAME/ && $OPT_KIOSK_DIR/setup_firefox_profile.sh"
+ExecStart=/bin/bash -c "mkdir -p /home/$KIOSK_USERNAME/.config/autostart && cp -r $TEMPLATE_DIR/.config/autostart/* /home/$KIOSK_USERNAME/.config/autostart/ && mkdir -p /home/$KIOSK_USERNAME/Desktop && cp -r $TEMPLATE_DIR/Desktop/* /home/$KIOSK_USERNAME/Desktop/ 2>/dev/null || true && mkdir -p /home/$KIOSK_USERNAME/Documents && cp -r $TEMPLATE_DIR/Documents/* /home/$KIOSK_USERNAME/Documents/ 2>/dev/null || true && mkdir -p /home/$KIOSK_USERNAME/.config/systemd/user && cp -r $TEMPLATE_DIR/.config/systemd/user/* /home/$KIOSK_USERNAME/.config/systemd/user/ 2>/dev/null || true && chown -R $KIOSK_USERNAME:$KIOSK_USERNAME /home/$KIOSK_USERNAME/ && $OPT_KIOSK_DIR/setup_firefox_profile.sh && systemctl --user --machine=$KIOSK_USERNAME@ enable kiosk-user-settings.service"
 RemainAfterExit=yes
 
 [Install]
