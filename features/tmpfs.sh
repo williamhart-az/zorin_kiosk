@@ -534,27 +534,245 @@ EOF
 chmod +x "$PERSISTENT_DCONF_SCRIPT"
 echo "Created persistent dconf settings script."
 
-# Create a systemd service to apply persistent dconf settings on boot
-echo "Creating systemd service for persistent dconf settings..."
-DCONF_SERVICE="/etc/systemd/system/kiosk-dconf-settings.service"
+# Create a direct dconf settings script for all users
+echo "Creating direct dconf settings script for all users..."
+DIRECT_DCONF_SCRIPT="$OPT_KIOSK_DIR/direct_dconf_settings.sh"
 
-cat > "$DCONF_SERVICE" << EOF
-[Unit]
-Description=Apply Persistent Dconf Settings for Kiosk
-After=local-fs.target
-Before=display-manager.service
+cat > "$DIRECT_DCONF_SCRIPT" << 'EOF'
+#!/bin/bash
 
-[Service]
-Type=oneshot
-ExecStart=$PERSISTENT_DCONF_SCRIPT $KIOSK_USERNAME
-RemainAfterExit=yes
+# Script to directly modify dconf settings for all users
+# This is a more aggressive approach to ensure settings are applied
 
-[Install]
-WantedBy=multi-user.target
+# Log file
+LOGFILE="/var/log/direct-dconf-settings.log"
+echo "$(date): Starting direct dconf settings script" > "$LOGFILE"
+
+# Function to directly modify a user's dconf database
+modify_user_dconf() {
+    local username="$1"
+    local uid=$(id -u "$username" 2>/dev/null)
+    
+    if [ -z "$uid" ]; then
+        echo "$(date): User $username does not exist" >> "$LOGFILE"
+        return 1
+    fi
+    
+    echo "$(date): Modifying dconf for user $username (UID: $uid)" >> "$LOGFILE"
+    
+    # Find the user's dconf database
+    local user_dconf_dir="/home/$username/.config/dconf"
+    if [ ! -d "$user_dconf_dir" ]; then
+        echo "$(date): User $username has no dconf directory, creating one" >> "$LOGFILE"
+        mkdir -p "$user_dconf_dir"
+        chown "$username:$username" "$user_dconf_dir"
+    fi
+    
+    # Create a temporary script to run as the user
+    local tmp_script="/tmp/direct_dconf_$username.sh"
+    cat > "$tmp_script" << 'INNEREOF'
+#!/bin/bash
+# Ensure DBUS is set
+export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$(id -u)/bus"
+
+# Direct dconf writes
+dconf write /org/gnome/desktop/session/idle-delay "uint32 0"
+dconf write /org/gnome/desktop/screensaver/lock-enabled "false"
+dconf write /org/gnome/desktop/screensaver/idle-activation-enabled "false"
+dconf write /org/gnome/desktop/lockdown/disable-lock-screen "true"
+dconf write /org/gnome/settings-daemon/plugins/power/idle-dim "false"
+dconf write /org/gnome/settings-daemon/plugins/power/sleep-display-ac "uint32 0"
+dconf write /org/gnome/settings-daemon/plugins/power/sleep-display-battery "uint32 0"
+dconf write /org/gnome/settings-daemon/plugins/power/sleep-inactive-ac-type "'nothing'"
+dconf write /org/gnome/settings-daemon/plugins/power/sleep-inactive-battery-type "'nothing'"
+
+# Verify the settings were applied
+echo "Verifying settings:"
+echo "idle-delay: $(dconf read /org/gnome/desktop/session/idle-delay)"
+echo "lock-enabled: $(dconf read /org/gnome/desktop/screensaver/lock-enabled)"
+echo "idle-activation-enabled: $(dconf read /org/gnome/desktop/screensaver/idle-activation-enabled)"
+echo "disable-lock-screen: $(dconf read /org/gnome/desktop/lockdown/disable-lock-screen)"
+INNEREOF
+    
+    chmod +x "$tmp_script"
+    
+    # Run the script as the user
+    echo "$(date): Running direct dconf script as $username" >> "$LOGFILE"
+    if [ "$username" = "root" ]; then
+        bash "$tmp_script" >> "$LOGFILE" 2>&1
+    else
+        su - "$username" -c "$tmp_script" >> "$LOGFILE" 2>&1
+    fi
+    
+    # Clean up
+    rm -f "$tmp_script"
+    
+    echo "$(date): Completed direct dconf modification for $username" >> "$LOGFILE"
+    return 0
+}
+
+# Create system-wide dconf settings
+echo "$(date): Setting up system-wide dconf settings" >> "$LOGFILE"
+
+# Create dconf profile directory
+mkdir -p /etc/dconf/profile
+echo "$(date): Created dconf profile directory" >> "$LOGFILE"
+
+# Create a system profile that applies to all users
+cat > /etc/dconf/profile/user << EOF
+user-db:user
+system-db:local
+system-db:site
+EOF
+echo "$(date): Created dconf user profile" >> "$LOGFILE"
+
+# Create the local database directory
+mkdir -p /etc/dconf/db/local.d
+echo "$(date): Created dconf local database directory" >> "$LOGFILE"
+
+# Create the settings file with explicit values
+cat > /etc/dconf/db/local.d/00-kiosk << EOF
+# Kiosk mode settings
+
+[org/gnome/desktop/session]
+idle-delay=uint32 0
+
+[org/gnome/desktop/screensaver]
+lock-enabled=false
+idle-activation-enabled=false
+
+[org/gnome/desktop/lockdown]
+disable-lock-screen=true
+
+[org/gnome/settings-daemon/plugins/power]
+idle-dim=false
+sleep-display-ac=uint32 0
+sleep-display-battery=uint32 0
+sleep-inactive-ac-type='nothing'
+sleep-inactive-battery-type='nothing'
+EOF
+echo "$(date): Created dconf settings file" >> "$LOGFILE"
+
+# Create locks directory
+mkdir -p /etc/dconf/db/local.d/locks
+echo "$(date): Created dconf locks directory" >> "$LOGFILE"
+
+# Create locks file to prevent user from changing these settings
+cat > /etc/dconf/db/local.d/locks/kiosk << EOF
+/org/gnome/desktop/session/idle-delay
+/org/gnome/desktop/screensaver/lock-enabled
+/org/gnome/desktop/screensaver/idle-activation-enabled
+/org/gnome/desktop/lockdown/disable-lock-screen
+/org/gnome/settings-daemon/plugins/power/idle-dim
+/org/gnome/settings-daemon/plugins/power/sleep-display-ac
+/org/gnome/settings-daemon/plugins/power/sleep-display-battery
+/org/gnome/settings-daemon/plugins/power/sleep-inactive-ac-type
+/org/gnome/settings-daemon/plugins/power/sleep-inactive-battery-type
+EOF
+echo "$(date): Created dconf locks file" >> "$LOGFILE"
+
+# Create a direct override in the dconf database for site-wide settings
+echo "$(date): Creating site-wide dconf settings" >> "$LOGFILE"
+mkdir -p /etc/dconf/db/site.d
+cat > /etc/dconf/db/site.d/00-no-idle << EOF
+[org/gnome/desktop/session]
+idle-delay=uint32 0
 EOF
 
-# Enable the service
-systemctl enable kiosk-dconf-settings.service
+# Update dconf database
+dconf update
+echo "$(date): Updated dconf database" >> "$LOGFILE"
+
+# Apply settings for all existing users
+echo "$(date): Applying settings to all existing users" >> "$LOGFILE"
+for user_home in /home/*; do
+    if [ -d "$user_home" ]; then
+        username=$(basename "$user_home")
+        # Skip system users and directories that aren't actually user homes
+        if id "$username" &>/dev/null && [ $(id -u "$username") -ge 1000 ]; then
+            echo "$(date): Found user: $username" >> "$LOGFILE"
+            modify_user_dconf "$username"
+        fi
+    fi
+done
+
+# Specifically check for and modify alocalbox user
+if id "alocalbox" &>/dev/null; then
+    echo "$(date): Specifically targeting alocalbox user" >> "$LOGFILE"
+    modify_user_dconf "alocalbox"
+fi
+
+# Apply settings for root user as well
+echo "$(date): Applying settings to root user" >> "$LOGFILE"
+modify_user_dconf "root"
+
+# Create a GDM configuration to apply these settings to the login screen as well
+if [ -d "/etc/gdm3" ] || [ -d "/etc/gdm" ]; then
+    echo "$(date): Configuring GDM to use system dconf settings" >> "$LOGFILE"
+    
+    # Create GDM dconf profile
+    mkdir -p /etc/dconf/profile
+    cat > /etc/dconf/profile/gdm << EOF
+user-db:user
+system-db:gdm
+system-db:local
+system-db:site
+EOF
+    
+    # Create GDM specific settings if needed
+    mkdir -p /etc/dconf/db/gdm.d
+    cat > /etc/dconf/db/gdm.d/01-screensaver << EOF
+# GDM login screen settings
+
+[org/gnome/desktop/session]
+idle-delay=uint32 0
+
+[org/gnome/desktop/screensaver]
+lock-enabled=false
+idle-activation-enabled=false
+EOF
+    
+    # Update dconf database again
+    dconf update
+    echo "$(date): Updated dconf database for GDM" >> "$LOGFILE"
+fi
+
+# Create a script to be run at user login to ensure settings are applied
+echo "$(date): Creating login script to apply settings" >> "$LOGFILE"
+mkdir -p /etc/profile.d
+cat > /etc/profile.d/apply-dconf-settings.sh << 'EOF'
+#!/bin/bash
+# Apply critical dconf settings at login
+
+# Only run for graphical sessions
+if [ -n "$DISPLAY" ] || [ -n "$WAYLAND_DISPLAY" ]; then
+    # Set idle-delay to 0 (never)
+    gsettings set org.gnome.desktop.session idle-delay 0 2>/dev/null || true
+    dconf write /org/gnome/desktop/session/idle-delay "uint32 0" 2>/dev/null || true
+    
+    # Disable screen lock
+    gsettings set org.gnome.desktop.lockdown disable-lock-screen true 2>/dev/null || true
+    dconf write /org/gnome/desktop/lockdown/disable-lock-screen true 2>/dev/null || true
+    
+    # Disable screensaver
+    gsettings set org.gnome.desktop.screensaver lock-enabled false 2>/dev/null || true
+    dconf write /org/gnome/desktop/screensaver/lock-enabled false 2>/dev/null || true
+    gsettings set org.gnome.desktop.screensaver idle-activation-enabled false 2>/dev/null || true
+    dconf write /org/gnome/desktop/screensaver/idle-activation-enabled false 2>/dev/null || true
+fi
+EOF
+chmod +x /etc/profile.d/apply-dconf-settings.sh
+echo "$(date): Created login script" >> "$LOGFILE"
+
+echo "$(date): Direct dconf settings script completed successfully" >> "$LOGFILE"
+EOF
+
+chmod +x "$DIRECT_DCONF_SCRIPT"
+echo "Created direct dconf settings script."
+
+# Run the direct dconf script immediately
+echo "Running direct dconf script..."
+$DIRECT_DCONF_SCRIPT
 
 # Create a user-level systemd service to apply settings after login
 mkdir -p "$TEMPLATE_DIR/.config/systemd/user"
@@ -565,12 +783,34 @@ After=graphical-session.target
 
 [Service]
 Type=oneshot
-ExecStart=$PERSISTENT_DCONF_SCRIPT $KIOSK_USERNAME
+ExecStart=/bin/bash -c 'gsettings set org.gnome.desktop.session idle-delay 0; dconf write /org/gnome/desktop/session/idle-delay "uint32 0"'
 RemainAfterExit=yes
 
 [Install]
 WantedBy=graphical-session.target
 EOF
+
+# Create a systemd service to run the direct dconf script on boot
+echo "Creating systemd service for direct dconf settings..."
+DIRECT_DCONF_SERVICE="/etc/systemd/system/direct-dconf-settings.service"
+
+cat > "$DIRECT_DCONF_SERVICE" << EOF
+[Unit]
+Description=Apply Direct Dconf Settings for All Users
+After=local-fs.target
+Before=display-manager.service
+
+[Service]
+Type=oneshot
+ExecStart=$DIRECT_DCONF_SCRIPT
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable the service
+systemctl enable direct-dconf-settings.service
 
 # 18. Create a systemd service to initialize kiosk home directory after tmpfs mount
 echo "Creating systemd service for kiosk home initialization..."
