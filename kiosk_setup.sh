@@ -14,11 +14,11 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 # Load configuration from .env file
-ENV_FILE="./kiosk_setup.env"
+ENV_FILE="./.env"
 
 if [ ! -f "$ENV_FILE" ]; then
   echo "Error: Configuration file $ENV_FILE not found."
-  echo "Please make sure the file exists in the same directory as this script."
+  echo "Please copy .env.example to .env and customize it for your environment."
   exit 1
 fi
 

@@ -23,7 +23,11 @@ git clone https://github.com/williamhart-az/zorinos-kiosk-setup.git
 cd zorinos-kiosk-setup
 ```
 
-2. Review and modify the configuration in `kiosk_setup.env` to match your requirements.
+2. Copy the example configuration file and modify it to match your requirements:
+```
+cp .env.example .env
+nano .env  # or use your preferred text editor
+```
 
 3. Run the setup script with sudo:
 ```
@@ -37,7 +41,7 @@ sudo reboot
 
 ## Configuration
 
-All configuration options are stored in the `kiosk_setup.env` file. You can customize:
+All configuration options are stored in the `.env` file. You can customize:
 
 - Kiosk user details (username, password, full name)
 - Admin username
