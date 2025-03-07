@@ -4,6 +4,74 @@
 tput init
 clear
 
+# Setup logging
+LOG_FILE="setup.log"
+ENABLE_LOGGING=true
+
+# Process command line arguments
+for arg in "$@"; do
+  case $arg in
+    --nolog)
+      ENABLE_LOGGING=false
+      shift
+      ;;
+  esac
+done
+
+# Initialize log file if logging is enabled
+if $ENABLE_LOGGING; then
+  echo "=== Kiosk Setup Log $(date) ===" > "$LOG_FILE"
+  echo "Command: $0 $@" >> "$LOG_FILE"
+  echo "----------------------------------------" >> "$LOG_FILE"
+fi
+
+# Function to log messages
+log_message() {
+  local message="$1"
+  local level="${2:-INFO}"
+  local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
+  
+  if $ENABLE_LOGGING; then
+    echo "[$level] $timestamp - $message" >> "$LOG_FILE"
+  fi
+  
+  # Only print non-DEBUG messages to the console
+  if [ "$level" != "DEBUG" ]; then
+    echo "[$level] $message"
+  fi
+}
+
+# Function to run a command with logging
+run_with_logging() {
+  local cmd="$1"
+  local feature_name="$2"
+  local script_name="$3"
+  
+  log_message "Installing $feature_name (using $script_name)" "INFO"
+  
+  if $ENABLE_LOGGING; then
+    # Run the command and capture output to log file
+    echo "----------------------------------------" >> "$LOG_FILE"
+    echo "Running: $cmd" >> "$LOG_FILE"
+    echo "----------------------------------------" >> "$LOG_FILE"
+    
+    # Execute command, tee output to log file, and capture exit status
+    set -o pipefail
+    output=$($cmd 2>&1 | tee -a "$LOG_FILE")
+    exit_status=$?
+    set +o pipefail
+    
+    echo "----------------------------------------" >> "$LOG_FILE"
+    log_message "Command completed with status: $exit_status" "DEBUG"
+    
+    return $exit_status
+  else
+    # Run the command normally
+    $cmd
+    return $?
+  fi
+}
+
 # Menu items and their initial states (0 = OFF, 1 = ON)
 menu_items=(
     "Create Firefox Profile Sync" 
@@ -83,13 +151,13 @@ run_single_feature() {
     echo "--------------------------------"
     if [ ${states[$selected]} -eq 1 ]; then
         script_path="features/${script_names[$selected]}"
-        echo "Running: $script_path enable"
-        echo "--------------------------------"
-        $script_path enable
+        log_message "Running single feature: ${menu_items[$selected]}" "INFO"
+        run_with_logging "$script_path enable" "${menu_items[$selected]}" "${script_names[$selected]}"
         echo "--------------------------------"
         echo "Execution complete!"
     else
         echo "Feature is OFF - nothing to run."
+        log_message "Feature ${menu_items[$selected]} is OFF - nothing to run" "DEBUG"
     fi
     echo "Press Enter to return to menu"
     read
@@ -114,22 +182,23 @@ run_all_on() {
     echo "--------------------------------"
     
     # Always run the user-setup.sh script
-    echo "Running: features/user-setup.sh enable"
-    features/user-setup.sh enable
+    log_message "Running required user setup" "INFO"
+    run_with_logging "features/user-setup.sh enable" "User Setup" "user-setup.sh"
     
     if [ $has_on -eq 1 ]; then
+        log_message "Executing additional features..." "DEBUG"
         echo "Executing additional features..."
         echo "--------------------------------"
         for i in $(seq 0 $((feature_count-1))); do
             if [ ${states[$i]} -eq 1 ]; then
                 script_path="features/${script_names[$i]}"
-                echo "Running: $script_path enable"
-                $script_path enable
+                run_with_logging "$script_path enable" "${menu_items[$i]}" "${script_names[$i]}"
                 sleep 1  # Brief delay between feature executions
             fi
         done
         echo "--------------------------------"
         echo "Execution complete!"
+        log_message "All features execution complete" "DEBUG"
     fi
     echo "Press Enter to return to menu"
     read
