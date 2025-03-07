@@ -90,7 +90,7 @@ script_names=(
     "master-profile.sh"
     "tmpfs.sh"
     "wifi.sh"
-    "schedule_reboot.sh"
+    "scheduled_reboot.sh"
 )
 # Initial states for all features (0 = OFF, 1 = ON)
 states=(1 1 1 1 1 1 0 0)  # Default all features ON
