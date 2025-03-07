@@ -74,22 +74,22 @@ run_with_logging() {
 
 # Menu items and their initial states (0 = OFF, 1 = ON)
 menu_items=(
-    "Create Firefox Profile Sync" 
-    "Never Sleep Screen" 
+    "Setup WiFi"
+    "Create Firefox Profile Sync"
     "Clone Admin Profile" 
-    "Use Temporary File System" 
-    "Setup WiFi" 
-    "Setup Reboot Interval" 
+    "Never Sleep Screen"   
+    "Use Temporary File System"
+    "Reboot Interval"
     "Run All ON" 
     "Cancel"
 )
 # Script names corresponding to menu items
 script_names=(
-    "Firefox.sh"
-    "idle-delay.sh"
-    "master-profile.sh"
-    "tmpfs.sh"
     "wifi.sh"
+    "Firefox.sh"
+    "master-profile.sh"
+    "idle-delay.sh"
+    "tmpfs.sh"
     "scheduled_reboot.sh"
 )
 # Initial states for all features (0 = OFF, 1 = ON)
