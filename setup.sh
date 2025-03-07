@@ -5,21 +5,43 @@ tput init
 clear
 
 # Menu items and their initial states (0 = OFF, 1 = ON)
-menu_items=("Feature 1" "Feature 2" "Feature 3" "Run All ON" "Cancel")
-states=(1 0 1 0 0)  # Initial states: Feature 1 ON, Feature 2 OFF, Feature 3 ON
+menu_items=(
+    "Create Firefox Profile Sync" 
+    "Never Sleep Screen" 
+    "Clone Admin Profile" 
+    "Use Temporary File System" 
+    "Setup WiFi" 
+    "Setup Reboot Interval" 
+    "Run All ON" 
+    "Cancel"
+)
+# Script names corresponding to menu items
+script_names=(
+    "Firefox.sh"
+    "idle-delay.sh"
+    "master-profile.sh"
+    "tmpfs.sh"
+    "wifi.sh"
+    "schedule_reboot.sh"
+)
+# Initial states for all features (0 = OFF, 1 = ON)
+states=(1 1 1 1 1 1 0 0)  # Default all features ON
 selected=0
 total_items=${#menu_items[@]}
+feature_count=$((total_items-2))  # Number of actual features (excluding Run All and Cancel)
 
 draw_menu() {
     clear
-    echo "=== Feature Control Interface ==="
+    echo "=== Kiosk Setup Feature Control Interface ==="
     echo "Up/Down: Select item | Left/Right/Space: Toggle ON/OFF"
     echo "Enter on feature: Run only that feature (if ON) | 'Run All ON': Run all ON features | 'Cancel': Exit"
+    echo "--------------------------------"
+    echo "Note: features/user-setup.sh will always run (required for Kiosk user creation)"
     echo "--------------------------------"
     for i in "${!menu_items[@]}"; do
         if [ $i -eq $selected ]; then
             tput setaf 2  # Green for selected item
-            if [ $i -lt 3 ]; then  # Only show state for features
+            if [ $i -lt $feature_count ]; then  # Only show state for features
                 if [ "${states[$i]}" -eq 1 ]; then
                     echo "> ${menu_items[$i]} [ON]"
                 else
@@ -30,7 +52,7 @@ draw_menu() {
             fi
             tput sgr0     # Reset color
         else
-            if [ $i -lt 3 ]; then
+            if [ $i -lt $feature_count ]; then
                 if [ "${states[$i]}" -eq 1 ]; then
                     echo "  ${menu_items[$i]} [ON]"
                 else
@@ -45,7 +67,7 @@ draw_menu() {
 }
 
 toggle_state() {
-    if [ $selected -lt 3 ]; then  # Only toggle features
+    if [ $selected -lt $feature_count ]; then  # Only toggle features
         if [ ${states[$selected]} -eq 1 ]; then
             states[$selected]=0
         else
@@ -60,10 +82,10 @@ run_single_feature() {
     echo "Selected feature: ${menu_items[$selected]}"
     echo "--------------------------------"
     if [ ${states[$selected]} -eq 1 ]; then
-        script_name=$(echo "${menu_items[$selected]}" | tr ' ' '_')
-        echo "Running: ./$script_name.sh enable"
+        script_path="features/${script_names[$selected]}"
+        echo "Running: $script_path enable"
         echo "--------------------------------"
-        ./$script_name.sh enable
+        $script_path enable
         echo "--------------------------------"
         echo "Execution complete!"
     else
@@ -78,26 +100,32 @@ run_all_on() {
     echo "=== Executing All ON Features ==="
     echo "The following features are set to ON and will be executed:"
     echo "--------------------------------"
+    echo "- features/user-setup.sh (always runs)"
     local has_on=0
-    for i in {0..2}; do  # Only check features (0-2)
+    for i in $(seq 0 $((feature_count-1))); do  # Check all features
         if [ ${states[$i]} -eq 1 ]; then
             echo "- ${menu_items[$i]}"
             has_on=1
         fi
     done
     if [ $has_on -eq 0 ]; then
-        echo "(No features are ON)"
+        echo "(No additional features are ON)"
     fi
     echo "--------------------------------"
+    
+    # Always run the user-setup.sh script
+    echo "Running: features/user-setup.sh enable"
+    features/user-setup.sh enable
+    
     if [ $has_on -eq 1 ]; then
-        echo "Executing now..."
+        echo "Executing additional features..."
         echo "--------------------------------"
-        for i in {0..2}; do
+        for i in $(seq 0 $((feature_count-1))); do
             if [ ${states[$i]} -eq 1 ]; then
-                script_name=$(echo "${menu_items[$i]}" | tr ' ' '_')
-                echo "Running: ./$script_name.sh enable"
-                ./$script_name.sh enable
-                sleep 1  # Optional: delay for visibility
+                script_path="features/${script_names[$i]}"
+                echo "Running: $script_path enable"
+                $script_path enable
+                sleep 1  # Brief delay between feature executions
             fi
         done
         echo "--------------------------------"
@@ -137,11 +165,11 @@ while true; do
             toggle_state
             ;;
         "") # Enter key
-            if [ $selected -lt 3 ]; then  # Feature selected
+            if [ $selected -lt $feature_count ]; then  # Feature selected
                 run_single_feature
-            elif [ $selected -eq 3 ]; then  # Run All ON selected
+            elif [ $selected -eq $feature_count ]; then  # Run All ON selected
                 run_all_on
-            elif [ $selected -eq 4 ]; then  # Cancel selected
+            elif [ $selected -eq $((feature_count+1)) ]; then  # Cancel selected
                 clear
                 echo "=== Operation Cancelled ==="
                 echo "No features were executed."
@@ -150,7 +178,7 @@ while true; do
                 exit 0
             fi
             ;;
-        $'\x1b') # Escape key - Also cancel
+        "q") # q key - Also cancel
             clear
             echo "=== Operation Cancelled ==="
             echo "No features were executed."
