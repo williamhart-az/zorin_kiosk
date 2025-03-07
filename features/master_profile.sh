@@ -1,53 +1,56 @@
 #!/bin/bash
 
-# ZorinOS Kiosk Master Profile Setup Script
-# Features: #14, 15
+# Master Profile Feature Script
+# This script handles cloning the master profile desktop and desktop icons to the kiosk user via the template directory
 
-# Exit on any error
-set -e
+# Configuration variables - these should match your main configuration
+KIOSK_USERNAME="kiosk"
+ADMIN_USERNAME="alocalbox"  # Admin username
 
-# Check if running as root
-if [ "$(id -u)" -ne 0 ]; then
-  echo "This script must be run as root. Please use sudo."
-  exit 1
-fi
+# Script directories
+OPT_KIOSK_DIR="/opt/kiosk"
+TEMPLATE_DIR="$OPT_KIOSK_DIR/templates"
 
-# Source the environment file
-echo "[DEBUG] Checking for environment file"
-if [ -z "$ENV_FILE" ]; then
-  # Look for the environment file next to kiosk_setup.sh
-  ENV_FILE="$(dirname "$0")/../kiosk_setup.env"
-  echo "[DEBUG] ENV_FILE not defined, using default: $ENV_FILE"
-  
-  # If not found, try looking in the same directory as kiosk_setup.sh
-  if [ ! -f "$ENV_FILE" ]; then
-    PARENT_DIR="$(dirname "$(dirname "$0")")"
-    for file in "$PARENT_DIR"/*.sh; do
-      if [ -f "$file" ] && grep -q "kiosk_setup" "$file"; then
-        ENV_FILE="$(dirname "$file")/kiosk_setup.env"
-        echo "[DEBUG] Looking for kiosk_setup.env next to kiosk_setup.sh: $ENV_FILE"
-        break
-      fi
-    done
+# Create template directories if they don't exist
+mkdir -p "$TEMPLATE_DIR/Desktop"
+mkdir -p "$TEMPLATE_DIR/Documents"
+mkdir -p "$TEMPLATE_DIR/.config/autostart"
+mkdir -p "$TEMPLATE_DIR/.local/share/applications"
+
+# Function to save admin changes to the template directory
+save_admin_changes() {
+  # Log initialization
+  LOGFILE="/tmp/admin_save.log"
+  echo "$(date): Saving admin changes to template directory..." >> "$LOGFILE"
+
+  # Copy Firefox profile if it exists
+  if [ -d "/home/$ADMIN_USERNAME/.mozilla" ]; then
+    echo "$(date): Copying Firefox profile to template..." >> "$LOGFILE"
+    rm -rf "$TEMPLATE_DIR/.mozilla"  # Remove existing profile
+    cp -r "/home/$ADMIN_USERNAME/.mozilla" "$TEMPLATE_DIR/"
+    chmod -R 755 "$TEMPLATE_DIR/.mozilla"
   fi
-fi
 
-echo "[DEBUG] Checking if environment file exists at: $ENV_FILE"
-if [ ! -f "$ENV_FILE" ]; then
-  echo "[ERROR] Environment file not found at $ENV_FILE"
-  echo "[ERROR] Please specify the correct path using the ENV_FILE variable."
-  exit 1
-fi
+  # Copy desktop shortcuts
+  echo "$(date): Copying desktop shortcuts to template..." >> "$LOGFILE"
+  cp -r "/home/$ADMIN_USERNAME/Desktop/"* "$TEMPLATE_DIR/Desktop/" 2>/dev/null || true
 
-echo "[DEBUG] Sourcing environment file: $ENV_FILE"
-source "$ENV_FILE"
-echo "[DEBUG] Environment file sourced successfully"
+  # Copy documents
+  echo "$(date): Copying documents to template..." >> "$LOGFILE"
+  cp -r "/home/$ADMIN_USERNAME/Documents/"* "$TEMPLATE_DIR/Documents/" 2>/dev/null || true
 
-# 14. Create a script to save admin changes to the template directory
-echo "Creating admin changes save script..."
-SAVE_ADMIN_SCRIPT="$OPT_KIOSK_DIR/save_admin_changes.sh"
+  # Set correct ownership for all template files
+  chown -R root:root "$TEMPLATE_DIR"
+  chmod -R 755 "$TEMPLATE_DIR"
 
-cat > "$SAVE_ADMIN_SCRIPT" << EOF
+  echo "$(date): Admin changes saved successfully." >> "$LOGFILE"
+}
+
+# Function to create the save admin changes script
+create_save_admin_script() {
+  SAVE_ADMIN_SCRIPT="$OPT_KIOSK_DIR/save_admin_changes.sh"
+
+  cat > "$SAVE_ADMIN_SCRIPT" << EOF
 #!/bin/bash
 
 # Script to save admin user changes to the kiosk template directory
@@ -62,19 +65,9 @@ mkdir -p "$TEMPLATE_DIR/Documents"
 mkdir -p "$TEMPLATE_DIR/.config/autostart"
 mkdir -p "$TEMPLATE_DIR/.local/share/applications"
 
-# Detect Firefox installation type and save profile accordingly
-# Check if Firefox is installed as a flatpak
-if [ -d "/var/lib/flatpak/app/org.mozilla.firefox" ] || [ -d "/home/$ADMIN_USERNAME/.local/share/flatpak/app/org.mozilla.firefox" ]; then
-  echo "\$(date): Firefox detected as flatpak, saving profile..." >> "\$LOGFILE"
-  if [ -d "/home/$ADMIN_USERNAME/.var/app/org.mozilla.firefox" ]; then
-    mkdir -p "$TEMPLATE_DIR/.var/app"
-    rm -rf "$TEMPLATE_DIR/.var/app/org.mozilla.firefox"  # Remove existing profile
-    cp -r "/home/$ADMIN_USERNAME/.var/app/org.mozilla.firefox" "$TEMPLATE_DIR/.var/app/"
-    chmod -R 755 "$TEMPLATE_DIR/.var/app/org.mozilla.firefox"
-  fi
-# Regular Firefox installation
-elif [ -d "/home/$ADMIN_USERNAME/.mozilla" ]; then
-  echo "\$(date): Regular Firefox detected, saving profile..." >> "\$LOGFILE"
+# Copy Firefox profile if it exists
+if [ -d "/home/$ADMIN_USERNAME/.mozilla" ]; then
+  echo "\$(date): Copying Firefox profile to template..." >> "\$LOGFILE"
   rm -rf "$TEMPLATE_DIR/.mozilla"  # Remove existing profile
   cp -r "/home/$ADMIN_USERNAME/.mozilla" "$TEMPLATE_DIR/"
   chmod -R 755 "$TEMPLATE_DIR/.mozilla"
@@ -95,16 +88,17 @@ chmod -R 755 "$TEMPLATE_DIR"
 echo "\$(date): Admin changes saved successfully." >> "\$LOGFILE"
 EOF
 
-chmod +x "$SAVE_ADMIN_SCRIPT"
+  chmod +x "$SAVE_ADMIN_SCRIPT"
+}
 
-# 15. Create a systemd service to save admin changes on logout
-echo "Creating systemd service for saving admin changes..."
-SYSTEMD_SERVICE="/etc/systemd/system/save-admin-changes.service"
+# Function to create systemd service for saving admin changes
+create_systemd_service() {
+  SYSTEMD_SERVICE="/etc/systemd/system/save-admin-changes.service"
 
-cat > "$SYSTEMD_SERVICE" << EOF
+  cat > "$SYSTEMD_SERVICE" << EOF
 [Unit]
 Description=Save admin changes to kiosk template directory
-Before=display-manager.service
+Before=lightdm.service
 
 [Service]
 Type=oneshot
@@ -115,5 +109,124 @@ RemainAfterExit=yes
 WantedBy=multi-user.target
 EOF
 
-# Enable the service
-systemctl enable save-admin-changes.service
+  # Enable the service
+  systemctl enable save-admin-changes.service
+}
+
+# Function to create systemd service for kiosk home initialization
+create_kiosk_init_service() {
+  KIOSK_INIT_SERVICE="/etc/systemd/system/kiosk-home-init.service"
+
+  cat > "$KIOSK_INIT_SERVICE" << EOF
+[Unit]
+Description=Initialize Kiosk User Home Directory
+After=local-fs.target
+Before=display-manager.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c "mkdir -p /home/$KIOSK_USERNAME/.config/autostart && cp -r $TEMPLATE_DIR/.config/autostart/* /home/$KIOSK_USERNAME/.config/autostart/ && mkdir -p /home/$KIOSK_USERNAME/Desktop && cp -r $TEMPLATE_DIR/Desktop/* /home/$KIOSK_USERNAME/Desktop/ && mkdir -p /home/$KIOSK_USERNAME/Documents && cp -r $TEMPLATE_DIR/Documents/* /home/$KIOSK_USERNAME/Documents/ 2>/dev/null || true && chown -R $KIOSK_USERNAME:$KIOSK_USERNAME /home/$KIOSK_USERNAME/"
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  # Enable the service
+  systemctl enable kiosk-home-init.service
+}
+
+# Function to initialize kiosk environment
+create_init_kiosk_script() {
+  INIT_SCRIPT="$OPT_KIOSK_DIR/init_kiosk.sh"
+
+  cat > "$INIT_SCRIPT" << EOF
+#!/bin/bash
+
+# Script to initialize kiosk environment on login
+
+# Log initialization
+LOGFILE="/tmp/kiosk_init.log"
+echo "\$(date): Initializing kiosk environment..." >> "\$LOGFILE"
+
+# Create necessary directories if they don't exist
+mkdir -p ~/Desktop
+mkdir -p ~/Documents
+mkdir -p ~/Downloads
+mkdir -p ~/Pictures
+mkdir -p ~/.config/autostart
+mkdir -p ~/.local/share/applications
+
+# Copy template files to kiosk home directory
+TEMPLATE_DIR="$TEMPLATE_DIR"
+
+# Copy Firefox profile if it exists
+if [ -d "\$TEMPLATE_DIR/.mozilla" ]; then
+  echo "\$(date): Copying Firefox profile from template..." >> "\$LOGFILE"
+  rm -rf ~/.mozilla  # Remove any existing profile
+  cp -r "\$TEMPLATE_DIR/.mozilla" ~/
+  chmod -R 700 ~/.mozilla
+fi
+
+# Copy desktop shortcuts if they exist
+if [ -d "\$TEMPLATE_DIR/Desktop" ]; then
+  echo "\$(date): Copying desktop shortcuts from template..." >> "\$LOGFILE"
+  cp -r "\$TEMPLATE_DIR/Desktop/"* ~/Desktop/ 2>/dev/null || true
+fi
+
+# Copy documents if they exist
+if [ -d "\$TEMPLATE_DIR/Documents" ]; then
+  echo "\$(date): Copying documents from template..." >> "\$LOGFILE"
+  cp -r "\$TEMPLATE_DIR/Documents/"* ~/Documents/ 2>/dev/null || true
+fi
+
+# Copy autostart entries if they exist
+if [ -d "\$TEMPLATE_DIR/.config/autostart" ]; then
+  echo "\$(date): Copying autostart entries from template..." >> "\$LOGFILE"
+  cp -r "\$TEMPLATE_DIR/.config/autostart/"* ~/.config/autostart/ 2>/dev/null || true
+fi
+
+echo "\$(date): Kiosk environment initialized successfully." >> "\$LOGFILE"
+EOF
+
+  chmod +x "$INIT_SCRIPT"
+}
+
+# Main execution
+echo "Setting up master profile feature..."
+
+# Create the necessary scripts
+create_save_admin_script
+create_init_kiosk_script
+
+# Create the systemd services
+create_systemd_service
+create_kiosk_init_service
+
+# Perform an initial save of admin changes
+save_admin_changes
+
+# Copy the autostart entries and desktop shortcut to the kiosk user's home directory if it exists
+if [ -d "/home/$KIOSK_USERNAME" ]; then
+  mkdir -p "/home/$KIOSK_USERNAME/.config/autostart"
+  mkdir -p "/home/$KIOSK_USERNAME/Desktop"
+  mkdir -p "/home/$KIOSK_USERNAME/Documents"
+  
+  # Copy from template to kiosk user
+  if [ -d "$TEMPLATE_DIR/.config/autostart" ]; then
+    cp -r "$TEMPLATE_DIR/.config/autostart/"* "/home/$KIOSK_USERNAME/.config/autostart/" 2>/dev/null || true
+  fi
+  
+  if [ -d "$TEMPLATE_DIR/Desktop" ]; then
+    cp -r "$TEMPLATE_DIR/Desktop/"* "/home/$KIOSK_USERNAME/Desktop/" 2>/dev/null || true
+  fi
+  
+  if [ -d "$TEMPLATE_DIR/Documents" ]; then
+    cp -r "$TEMPLATE_DIR/Documents/"* "/home/$KIOSK_USERNAME/Documents/" 2>/dev/null || true
+  fi
+  
+  # Set correct ownership
+  chown -R "$KIOSK_USERNAME:$KIOSK_USERNAME" "/home/$KIOSK_USERNAME/"
+fi
+
+echo "Master profile feature setup complete."
