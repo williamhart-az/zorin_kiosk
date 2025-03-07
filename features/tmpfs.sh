@@ -524,7 +524,12 @@ echo "Created direct dconf settings script."
 
 # Run the direct dconf script immediately
 echo "Running direct dconf script..."
-$DIRECT_DCONF_SCRIPT
+if [ -x "$DIRECT_DCONF_SCRIPT" ]; then
+    "$DIRECT_DCONF_SCRIPT"
+else
+    echo "Error: Direct dconf script not found or not executable at $DIRECT_DCONF_SCRIPT"
+    exit 1
+fi
 
 
 
