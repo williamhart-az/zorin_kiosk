@@ -16,7 +16,7 @@ fi
 echo "[DEBUG] Checking for environment file"
 if [ -z "$ENV_FILE" ]; then
   # Look for the environment file next to kiosk_setup.sh
-  ENV_FILE="$(dirname "$0")/../kiosk_setup.env"
+  ENV_FILE="$(dirname "$0")/../.env"
   echo "[DEBUG] ENV_FILE not defined, using default: $ENV_FILE"
   
   # If not found, try looking in the same directory as kiosk_setup.sh
@@ -24,8 +24,8 @@ if [ -z "$ENV_FILE" ]; then
     PARENT_DIR="$(dirname "$(dirname "$0")")"
     for file in "$PARENT_DIR"/*.sh; do
       if [ -f "$file" ] && grep -q "kiosk_setup" "$file"; then
-        ENV_FILE="$(dirname "$file")/kiosk_setup.env"
-        echo "[DEBUG] Looking for kiosk_setup.env next to kiosk_setup.sh: $ENV_FILE"
+        ENV_FILE="$(dirname "$file")/.env"
+        echo "[DEBUG] Looking for .env next to kiosk_setup.sh: $ENV_FILE"
         break
       fi
     done
