@@ -192,41 +192,110 @@ if [ ! -f "$OPT_KIOSK_DIR/disable_screensaver.sh" ]; then
 LOGFILE="/tmp/disable_screensaver.log"
 echo "$(date): Starting screen blanking prevention script" > "$LOGFILE"
 
-# Method 1: Use xset to disable DPMS and screen blanking
-if command -v xset &> /dev/null; then
-    echo "$(date): Using xset to disable DPMS and screen blanking" >> "$LOGFILE"
-    xset s off -dpms
-    xset s noblank
-    xset -dpms
-    echo "$(date): xset commands executed" >> "$LOGFILE"
+# Function to safely run xset commands with error handling
+safe_xset() {
+    if command -v xset &> /dev/null; then
+        # Check if DISPLAY is set
+        if [ -z "$DISPLAY" ]; then
+            echo "$(date): DISPLAY environment variable not set, setting to :0" >> "$LOGFILE"
+            export DISPLAY=:0
+        fi
+        
+        # Try to run xset command and capture any errors
+        OUTPUT=$(xset $@ 2>&1)
+        if [ $? -ne 0 ]; then
+            echo "$(date): xset $@ failed: $OUTPUT" >> "$LOGFILE"
+            return 1
+        else
+            echo "$(date): xset $@ succeeded" >> "$LOGFILE"
+            return 0
+        fi
+    else
+        echo "$(date): xset command not found" >> "$LOGFILE"
+        return 1
+    fi
+}
+
+# Method 1: Use xset to disable DPMS and screen blanking with error handling
+echo "$(date): Attempting to use xset to disable DPMS and screen blanking" >> "$LOGFILE"
+
+# Wait for X server to be ready (up to 30 seconds)
+COUNTER=0
+while [ $COUNTER -lt 30 ]; do
+    if safe_xset q &>/dev/null; then
+        echo "$(date): X server is ready" >> "$LOGFILE"
+        break
+    fi
+    echo "$(date): Waiting for X server to be ready ($COUNTER/30)" >> "$LOGFILE"
+    sleep 1
+    COUNTER=$((COUNTER+1))
+done
+
+# Try different xset commands with error handling
+safe_xset s off || echo "$(date): Failed to set xset s off" >> "$LOGFILE"
+safe_xset s noblank || echo "$(date): Failed to set xset s noblank" >> "$LOGFILE"
+
+# Try to disable DPMS if supported
+if xset q | grep -q "DPMS"; then
+    echo "$(date): DPMS is supported, attempting to disable" >> "$LOGFILE"
+    safe_xset -dpms || echo "$(date): Failed to disable DPMS with xset -dpms" >> "$LOGFILE"
 else
-    echo "$(date): xset command not found" >> "$LOGFILE"
+    echo "$(date): DPMS is not supported by this X server" >> "$LOGFILE"
 fi
 
 # Method 2: Use gsettings to disable screen blanking and locking
 if command -v gsettings &> /dev/null; then
     echo "$(date): Using gsettings to disable screen blanking and locking" >> "$LOGFILE"
     
+    # Function to safely set gsettings
+    safe_gsettings_set() {
+        local schema="$1"
+        local key="$2"
+        local value="$3"
+        
+        # Check if schema exists
+        if gsettings list-schemas 2>/dev/null | grep -q "^$schema$"; then
+            # Check if key exists in schema
+            if gsettings list-keys "$schema" 2>/dev/null | grep -q "^$key$"; then
+                echo "$(date): Setting $schema $key to $value" >> "$LOGFILE"
+                gsettings set "$schema" "$key" "$value" 2>/dev/null
+                if [ $? -eq 0 ]; then
+                    echo "$(date): Successfully set $schema $key to $value" >> "$LOGFILE"
+                    return 0
+                else
+                    echo "$(date): Failed to set $schema $key to $value" >> "$LOGFILE"
+                    return 1
+                fi
+            else
+                echo "$(date): Key $key not found in schema $schema" >> "$LOGFILE"
+                return 1
+            fi
+        else
+            echo "$(date): Schema $schema not found" >> "$LOGFILE"
+            return 1
+        fi
+    }
+    
     # Disable screen lock
-    gsettings set org.gnome.desktop.lockdown disable-lock-screen true
+    safe_gsettings_set "org.gnome.desktop.lockdown" "disable-lock-screen" "true"
     
     # Disable screensaver
-    gsettings set org.gnome.desktop.session idle-delay 0
-    gsettings set org.gnome.desktop.screensaver lock-enabled false
-    gsettings set org.gnome.desktop.screensaver idle-activation-enabled false
+    safe_gsettings_set "org.gnome.desktop.session" "idle-delay" "0"
+    safe_gsettings_set "org.gnome.desktop.screensaver" "lock-enabled" "false"
+    safe_gsettings_set "org.gnome.desktop.screensaver" "idle-activation-enabled" "false"
     
     # Disable screen dimming
-    gsettings set org.gnome.settings-daemon.plugins.power idle-dim false
+    safe_gsettings_set "org.gnome.settings-daemon.plugins.power" "idle-dim" "false"
     
     # Set power settings to never blank screen
-    gsettings set org.gnome.settings-daemon.plugins.power sleep-display-ac 0
-    gsettings set org.gnome.settings-daemon.plugins.power sleep-display-battery 0
+    safe_gsettings_set "org.gnome.settings-daemon.plugins.power" "sleep-display-ac" "0"
+    safe_gsettings_set "org.gnome.settings-daemon.plugins.power" "sleep-display-battery" "0"
     
     # Disable automatic suspend
-    gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-ac-type 'nothing'
-    gsettings set org.gnome.settings-daemon.plugins.power sleep-inactive-battery-type 'nothing'
+    safe_gsettings_set "org.gnome.settings-daemon.plugins.power" "sleep-inactive-ac-type" "'nothing'"
+    safe_gsettings_set "org.gnome.settings-daemon.plugins.power" "sleep-inactive-battery-type" "'nothing'"
     
-    echo "$(date): gsettings commands executed" >> "$LOGFILE"
+    echo "$(date): gsettings commands completed" >> "$LOGFILE"
 else
     echo "$(date): gsettings command not found" >> "$LOGFILE"
 fi
@@ -235,30 +304,46 @@ fi
 if command -v dconf &> /dev/null; then
     echo "$(date): Using dconf to disable screen blanking and locking" >> "$LOGFILE"
     
+    # Function to safely write dconf settings
+    safe_dconf_write() {
+        local path="$1"
+        local value="$2"
+        
+        echo "$(date): Setting dconf $path to $value" >> "$LOGFILE"
+        dconf write "$path" "$value" 2>/dev/null
+        if [ $? -eq 0 ]; then
+            echo "$(date): Successfully set dconf $path to $value" >> "$LOGFILE"
+            return 0
+        else
+            echo "$(date): Failed to set dconf $path to $value" >> "$LOGFILE"
+            return 1
+        fi
+    }
+    
     # Disable screen lock
-    dconf write /org/gnome/desktop/lockdown/disable-lock-screen true
+    safe_dconf_write "/org/gnome/desktop/lockdown/disable-lock-screen" "true"
     
     # Disable screensaver
-    dconf write /org/gnome/desktop/session/idle-delay "uint32 0"
-    dconf write /org/gnome/desktop/screensaver/lock-enabled false
-    dconf write /org/gnome/desktop/screensaver/idle-activation-enabled false
+    safe_dconf_write "/org/gnome/desktop/session/idle-delay" "uint32 0"
+    safe_dconf_write "/org/gnome/desktop/screensaver/lock-enabled" "false"
+    safe_dconf_write "/org/gnome/desktop/screensaver/idle-activation-enabled" "false"
     
     # Disable screen dimming
-    dconf write /org/gnome/settings-daemon/plugins/power/idle-dim false
+    safe_dconf_write "/org/gnome/settings-daemon/plugins/power/idle-dim" "false"
     
     # Set power settings to never blank screen
-    dconf write /org/gnome/settings-daemon/plugins/power/sleep-display-ac "uint32 0"
-    dconf write /org/gnome/settings-daemon/plugins/power/sleep-display-battery "uint32 0"
+    safe_dconf_write "/org/gnome/settings-daemon/plugins/power/sleep-display-ac" "uint32 0"
+    safe_dconf_write "/org/gnome/settings-daemon/plugins/power/sleep-display-battery" "uint32 0"
     
     # Disable automatic suspend
-    dconf write /org/gnome/settings-daemon/plugins/power/sleep-inactive-ac-type "'nothing'"
-    dconf write /org/gnome/settings-daemon/plugins/power/sleep-inactive-battery-type "'nothing'"
+    safe_dconf_write "/org/gnome/settings-daemon/plugins/power/sleep-inactive-ac-type" "'nothing'"
+    safe_dconf_write "/org/gnome/settings-daemon/plugins/power/sleep-inactive-battery-type" "'nothing'"
     
     # Zorin OS specific settings (if they exist)
-    dconf write /com/zorin/desktop/screensaver/lock-enabled false 2>/dev/null || true
-    dconf write /com/zorin/desktop/session/idle-delay "uint32 0" 2>/dev/null || true
+    safe_dconf_write "/com/zorin/desktop/screensaver/lock-enabled" "false" 2>/dev/null || true
+    safe_dconf_write "/com/zorin/desktop/session/idle-delay" "uint32 0" 2>/dev/null || true
     
-    echo "$(date): dconf commands executed" >> "$LOGFILE"
+    echo "$(date): dconf commands completed" >> "$LOGFILE"
 else
     echo "$(date): dconf command not found" >> "$LOGFILE"
 fi
@@ -268,7 +353,8 @@ if command -v systemd-inhibit &> /dev/null; then
     echo "$(date): Using systemd-inhibit to prevent screen blanking" >> "$LOGFILE"
     # Run a small sleep command that will keep the inhibitor active
     systemd-inhibit --what=idle:sleep:handle-lid-switch --who="Kiosk Mode" --why="Prevent screen blanking in kiosk mode" sleep infinity &
-    echo "$(date): systemd-inhibit started with PID $!" >> "$LOGFILE"
+    INHIBIT_PID=$!
+    echo "$(date): systemd-inhibit started with PID $INHIBIT_PID" >> "$LOGFILE"
 else
     echo "$(date): systemd-inhibit command not found" >> "$LOGFILE"
 fi
@@ -280,9 +366,9 @@ echo "$(date): Starting activity simulation loop" >> "$LOGFILE"
         # Simulate user activity every 60 seconds
         if command -v xdotool &> /dev/null; then
             # Move mouse 1 pixel right and then back
-            xdotool mousemove_relative -- 1 0
+            xdotool mousemove_relative -- 1 0 2>/dev/null
             sleep 1
-            xdotool mousemove_relative -- -1 0
+            xdotool mousemove_relative -- -1 0 2>/dev/null
             echo "$(date): Simulated mouse movement" >> "$LOGFILE"
         else
             # If xdotool is not available, try to use DISPLAY to trigger activity
@@ -294,8 +380,42 @@ echo "$(date): Starting activity simulation loop" >> "$LOGFILE"
         sleep 60
     done
 ) &
+ACTIVITY_PID=$!
+echo "$(date): Activity simulation started with PID $ACTIVITY_PID" >> "$LOGFILE"
+
+# Method 6: Use xfce4-power-manager settings if available (for Zorin OS Lite)
+if command -v xfconf-query &> /dev/null; then
+    echo "$(date): Detected xfconf-query, attempting to configure XFCE power settings" >> "$LOGFILE"
+    
+    # Try to set XFCE power manager settings
+    xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/dpms-enabled -s false 2>/dev/null && \
+        echo "$(date): Disabled XFCE DPMS" >> "$LOGFILE" || \
+        echo "$(date): Failed to disable XFCE DPMS" >> "$LOGFILE"
+        
+    xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/blank-on-ac -s 0 2>/dev/null && \
+        echo "$(date): Set XFCE blank-on-ac to 0" >> "$LOGFILE" || \
+        echo "$(date): Failed to set XFCE blank-on-ac" >> "$LOGFILE"
+        
+    xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/blank-on-battery -s 0 2>/dev/null && \
+        echo "$(date): Set XFCE blank-on-battery to 0" >> "$LOGFILE" || \
+        echo "$(date): Failed to set XFCE blank-on-battery" >> "$LOGFILE"
+        
+    xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/dpms-on-ac-off -s 0 2>/dev/null && \
+        echo "$(date): Set XFCE dpms-on-ac-off to 0" >> "$LOGFILE" || \
+        echo "$(date): Failed to set XFCE dpms-on-ac-off" >> "$LOGFILE"
+        
+    xfconf-query -c xfce4-power-manager -p /xfce4-power-manager/dpms-on-battery-off -s 0 2>/dev/null && \
+        echo "$(date): Set XFCE dpms-on-battery-off to 0" >> "$LOGFILE" || \
+        echo "$(date): Failed to set XFCE dpms-on-battery-off" >> "$LOGFILE"
+else
+    echo "$(date): xfconf-query not found, skipping XFCE power settings" >> "$LOGFILE"
+fi
 
 echo "$(date): Screen blanking prevention script completed" >> "$LOGFILE"
+
+# Keep the script running to ensure settings persist
+# This prevents the script from exiting and killing background processes
+tail -f /dev/null
 EOF
   chmod +x "$OPT_KIOSK_DIR/disable_screensaver.sh"
   echo "[DEBUG] Screen blanking prevention script created and made executable"
