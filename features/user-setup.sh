@@ -712,19 +712,46 @@ if [ -f "/etc/os-release" ] && grep -q "Zorin OS" /etc/os-release; then
       DCONF_SCRIPT="/tmp/dconf_autologin.sh"
       cat > "$DCONF_SCRIPT" << EOF
 #!/bin/bash
+
+# Wait for D-Bus session to be available (up to 30 seconds)
+COUNTER=0
+while [ \$COUNTER -lt 30 ]; do
+    if [ -e "/run/user/\$(id -u)/bus" ]; then
+        echo "[DEBUG] D-Bus session found"
+        break
+    fi
+    echo "[DEBUG] Waiting for D-Bus session (\$COUNTER/30)"
+    sleep 1
+    COUNTER=\$((COUNTER+1))
+done
+
 export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/\$(id -u)/bus
 
-# Try to set auto-login using dconf
-dconf write /org/gnome/login-screen/enable-auto-login true || echo "Failed to set enable-auto-login"
-dconf write /org/gnome/login-screen/auto-login-user "'$KIOSK_USERNAME'" || echo "Failed to set auto-login-user"
+# Function to safely write dconf settings
+safe_dconf_write() {
+    local path="\$1"
+    local value="\$2"
+    local schema="\$(echo "\$path" | cut -d'/' -f2-3)"
+    
+    # Check if schema exists
+    if dconf list "/\$schema/" &>/dev/null; then
+        dconf write "\$path" "\$value" && echo "[DEBUG] Successfully set \$path" || echo "[WARNING] Failed to set \$path"
+    else
+        echo "[DEBUG] Schema \$schema not found, skipping \$path"
+    fi
+}
+
+# Try to set auto-login using dconf with error handling
+safe_dconf_write "/org/gnome/login-screen/enable-auto-login" "true"
+safe_dconf_write "/org/gnome/login-screen/auto-login-user" "'$KIOSK_USERNAME'"
 
 # Try Zorin OS specific settings
-dconf write /com/zorin/desktop/auto-login/enabled true || echo "Failed to set Zorin auto-login enabled"
-dconf write /com/zorin/desktop/auto-login/user "'$KIOSK_USERNAME'" || echo "Failed to set Zorin auto-login user"
+safe_dconf_write "/com/zorin/desktop/auto-login/enabled" "true"
+safe_dconf_write "/com/zorin/desktop/auto-login/user" "'$KIOSK_USERNAME'"
 
 # Try to disable screen lock
-dconf write /org/gnome/desktop/lockdown/disable-lock-screen true || echo "Failed to disable lock screen"
-dconf write /org/gnome/desktop/screensaver/lock-enabled false || echo "Failed to disable screensaver lock"
+safe_dconf_write "/org/gnome/desktop/lockdown/disable-lock-screen" "true"
+safe_dconf_write "/org/gnome/desktop/screensaver/lock-enabled" "false"
 EOF
       chmod +x "$DCONF_SCRIPT"
       
@@ -804,13 +831,33 @@ safe_gsettings_set() {
   local key="$2"
   local value="$3"
   
+  # Wait for D-Bus session to be available (up to 30 seconds)
+  COUNTER=0
+  while [ $COUNTER -lt 30 ]; do
+    if [ -e "/run/user/$(id -u)/bus" ]; then
+      echo "[DEBUG] D-Bus session found"
+      break
+    fi
+    echo "[DEBUG] Waiting for D-Bus session ($COUNTER/30)"
+    sleep 1
+    COUNTER=$((COUNTER+1))
+  done
+  
+  # Set DBUS address
+  export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus
+  
   # Check if schema exists
-  if gsettings list-schemas | grep -q "^$schema$"; then
+  if gsettings list-schemas 2>/dev/null | grep -q "^$schema$"; then
     # Check if key exists in schema
     if gsettings list-keys "$schema" 2>/dev/null | grep -q "^$key$"; then
       echo "[DEBUG] Setting $schema $key to $value"
-      gsettings set "$schema" "$key" "$value"
-      return 0
+      if gsettings set "$schema" "$key" "$value" 2>/dev/null; then
+        echo "[DEBUG] Successfully set $schema $key"
+        return 0
+      else
+        echo "[WARNING] Failed to set $schema $key"
+        return 1
+      fi
     else
       echo "[DEBUG] Key $key not found in schema $schema"
       return 1

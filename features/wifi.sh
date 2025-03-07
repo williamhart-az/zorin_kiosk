@@ -68,11 +68,24 @@ ensure_wifi_packages() {
   # Install missing packages if any
   if [ -n "$missing_packages" ]; then
     echo "[DEBUG] Installing missing packages:$missing_packages"
-    apt update && apt install -y $missing_packages || {
-      echo "[ERROR] Failed to install required packages"
-      return 1
-    }
-    echo "[DEBUG] Required packages installed successfully"
+    # Try multiple package installation methods
+    if ! apt update && apt install -y $missing_packages; then
+      echo "[DEBUG] First attempt failed, trying without update..."
+      if ! apt install -y $missing_packages; then
+        echo "[DEBUG] Direct install failed, trying packages individually..."
+        local install_failed=0
+        for pkg in $missing_packages; do
+          if ! apt install -y $pkg; then
+            echo "[WARNING] Failed to install package: $pkg"
+            install_failed=1
+          fi
+        done
+        if [ $install_failed -eq 1 ]; then
+          echo "[WARNING] Some packages failed to install, but continuing..."
+        fi
+      fi
+    fi
+    echo "[DEBUG] Package installation completed"
   else
     echo "[DEBUG] All required packages are already installed"
   fi
