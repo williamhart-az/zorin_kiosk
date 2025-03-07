@@ -65,6 +65,10 @@ echo "Setting up Firefox..."
 echo "Setting up master profile..."
 ./features/master_profile.sh
 
+# Set up idle delay settings
+echo "Setting up idle delay settings..."
+./features/idle-delay.sh
+
 # Finally, set up tmpfs (Features #3, 4, 5, 6, 13, 16, 17, 18)
 # This must be done last as it depends on scripts created by previous features
 echo "Setting up tmpfs..."
