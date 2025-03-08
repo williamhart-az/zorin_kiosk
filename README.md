@@ -34,10 +34,33 @@ nano .env  # or use your preferred text editor
 sudo bash kiosk_setup.sh
 ```
 
+**Note:** We're developing a new feature selection menu (`setup.sh`) that will allow you to choose which features to enable, but it currently has some bugs being worked out. Please continue using `kiosk_setup.sh` for now.
+
 4. Reboot your system to apply the changes:
 ```
 sudo reboot
 ```
+
+## New Feature Selection Menu (Coming Soon)
+
+We're developing a new interactive menu system (`setup.sh`) that will allow you to selectively enable or disable specific features:
+
+- Create Firefox Profile Sync
+- Never Sleep Screen
+- Clone Admin Profile
+- Use Temporary File System
+- Setup WiFi
+- Setup Reboot Interval
+
+The menu provides an easy-to-use interface where you can:
+- Navigate through options using arrow keys
+- Toggle features ON/OFF using space or left/right arrow keys
+- Run a single feature or all enabled features
+- Cancel and exit without making changes
+
+Note that the core user setup feature will always run, as it's required for kiosk functionality.
+
+**Important:** This feature is still in development and has some bugs being worked out. Please continue using `kiosk_setup.sh` for now.
 
 ## Configuration
 
