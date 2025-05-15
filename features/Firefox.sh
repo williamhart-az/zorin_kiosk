@@ -43,6 +43,53 @@ echo "[DEBUG] Sourcing environment file: $ENV_FILE"
 source "$ENV_FILE"
 echo "[DEBUG] Environment file sourced successfully"
 
+# Define kiosk user's home directory
+KIOSK_USER_HOME="/home/$KIOSK_USERNAME"
+
+# Define potential base directories for Firefox profiles
+FLATPAK_APP_BASE_DIR="$KIOSK_USER_HOME/.var/app"
+FLATPAK_FIREFOX_PROFILE_DIR="$FLATPAK_APP_BASE_DIR/org.mozilla.firefox"
+STANDARD_FIREFOX_PROFILE_PARENT_DIR="$KIOSK_USER_HOME/.mozilla"
+
+echo "[INFO] Ensuring Firefox base directories are correctly permissioned for user $KIOSK_USERNAME..."
+
+# Create and permission .var and .var/app for Flatpak
+if [ ! -d "$KIOSK_USER_HOME/.var" ]; then
+    mkdir -p "$KIOSK_USER_HOME/.var"
+    echo "[DEBUG] Created $KIOSK_USER_HOME/.var"
+fi
+chown "$KIOSK_USERNAME:$KIOSK_USERNAME" "$KIOSK_USER_HOME/.var"
+chmod 700 "$KIOSK_USER_HOME/.var"
+echo "[DEBUG] Set ownership and permissions for $KIOSK_USER_HOME/.var"
+
+if [ ! -d "$FLATPAK_APP_BASE_DIR" ]; then
+    mkdir -p "$FLATPAK_APP_BASE_DIR"
+    echo "[DEBUG] Created $FLATPAK_APP_BASE_DIR"
+fi
+chown "$KIOSK_USERNAME:$KIOSK_USERNAME" "$FLATPAK_APP_BASE_DIR"
+chmod 700 "$FLATPAK_APP_BASE_DIR"
+echo "[DEBUG] Set ownership and permissions for $FLATPAK_APP_BASE_DIR"
+
+# Create and permission the Flatpak Firefox profile directory
+if [ ! -d "$FLATPAK_FIREFOX_PROFILE_DIR" ]; then
+    mkdir -p "$FLATPAK_FIREFOX_PROFILE_DIR"
+    echo "[DEBUG] Created $FLATPAK_FIREFOX_PROFILE_DIR"
+fi
+chown "$KIOSK_USERNAME:$KIOSK_USERNAME" "$FLATPAK_FIREFOX_PROFILE_DIR"
+chmod 700 "$FLATPAK_FIREFOX_PROFILE_DIR"
+echo "[DEBUG] Set ownership and permissions for $FLATPAK_FIREFOX_PROFILE_DIR"
+
+# Create and permission the standard Firefox profile parent directory
+if [ ! -d "$STANDARD_FIREFOX_PROFILE_PARENT_DIR" ]; then
+    mkdir -p "$STANDARD_FIREFOX_PROFILE_PARENT_DIR"
+    echo "[DEBUG] Created $STANDARD_FIREFOX_PROFILE_PARENT_DIR"
+fi
+chown "$KIOSK_USERNAME:$KIOSK_USERNAME" "$STANDARD_FIREFOX_PROFILE_PARENT_DIR"
+chmod 700 "$STANDARD_FIREFOX_PROFILE_PARENT_DIR"
+echo "[DEBUG] Set ownership and permissions for $STANDARD_FIREFOX_PROFILE_PARENT_DIR"
+
+echo "[INFO] Base directory setup for Firefox complete."
+
 # 7. Create Firefox profile setup script
 echo "Creating Firefox profile setup script..."
 FIREFOX_PROFILE_SCRIPT="$OPT_KIOSK_DIR/setup_firefox_profile.sh"
