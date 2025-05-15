@@ -90,6 +90,20 @@ if [ -n "\$FF_PROFILE_SOURCE_DIR" ]; then
   rm -rf "$TEMPLATE_DIR/.mozilla"  # Remove existing profile first
   cp -r "\$FF_PROFILE_SOURCE_DIR" "$TEMPLATE_DIR/.mozilla" # Copies the found profile dir and names the copy '.mozilla'
   chmod -R 755 "$TEMPLATE_DIR/.mozilla"
+  
+  # Store the Firefox profile type for later use
+  FF_PROFILE_TYPE="unknown"
+  if [[ "\$FF_PROFILE_SOURCE_DIR" == *"/snap/firefox/"* ]]; then
+    FF_PROFILE_TYPE="snap"
+  elif [[ "\$FF_PROFILE_SOURCE_DIR" == *".var/app/org.mozilla.firefox"* ]]; then
+    FF_PROFILE_TYPE="flatpak"
+  elif [[ "\$FF_PROFILE_SOURCE_DIR" == *".mozilla"* ]]; then
+    FF_PROFILE_TYPE="traditional"
+  fi
+  
+  # Create a file to indicate the Firefox profile type
+  echo "\$FF_PROFILE_TYPE" > "$TEMPLATE_DIR/.firefox_profile_type"
+  chmod 644 "$TEMPLATE_DIR/.firefox_profile_type"
 else
   echo "\$(date): Firefox profile directory not found for user $ADMIN_USERNAME. Searched Snap, Flatpak, and traditional paths." >> "\$LOGFILE"
 fi
@@ -146,7 +160,7 @@ Before=display-manager.service
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c "mkdir -p /home/$KIOSK_USERNAME/.config/autostart && cp -r $TEMPLATE_DIR/.config/autostart/* /home/$KIOSK_USERNAME/.config/autostart/ && mkdir -p /home/$KIOSK_USERNAME/Desktop && cp -r $TEMPLATE_DIR/Desktop/* /home/$KIOSK_USERNAME/Desktop/ && mkdir -p /home/$KIOSK_USERNAME/Documents && cp -r $TEMPLATE_DIR/Documents/* /home/$KIOSK_USERNAME/Documents/ 2>/dev/null || true && chown -R $KIOSK_USERNAME:$KIOSK_USERNAME /home/$KIOSK_USERNAME/"
+ExecStart=/bin/bash -c "mkdir -p /home/$KIOSK_USERNAME/.config/autostart && cp -r $TEMPLATE_DIR/.config/autostart/* /home/$KIOSK_USERNAME/.config/autostart/ && mkdir -p /home/$KIOSK_USERNAME/Desktop && cp -r $TEMPLATE_DIR/Desktop/* /home/$KIOSK_USERNAME/Desktop/ && mkdir -p /home/$KIOSK_USERNAME/Documents && cp -r $TEMPLATE_DIR/Documents/* /home/$KIOSK_USERNAME/Documents/ 2>/dev/null || true && if [ -d '$TEMPLATE_DIR/.mozilla' ]; then cp -r $TEMPLATE_DIR/.mozilla /home/$KIOSK_USERNAME/ && if [ -f '$TEMPLATE_DIR/.firefox_profile_type' ] && [ \\$(cat '$TEMPLATE_DIR/.firefox_profile_type') = 'flatpak' ]; then mkdir -p /home/$KIOSK_USERNAME/.var/app/org.mozilla.firefox; fi; fi && chown -R $KIOSK_USERNAME:$KIOSK_USERNAME /home/$KIOSK_USERNAME/"
 RemainAfterExit=yes
 
 [Install]
@@ -181,12 +195,42 @@ mkdir -p ~/.local/share/applications
 # Copy template files to kiosk home directory
 TEMPLATE_DIR="$TEMPLATE_DIR"
 
+# Store the Firefox profile source type for later use
+FF_PROFILE_TYPE="unknown"
+if [[ "\$FF_PROFILE_SOURCE_DIR" == *"/snap/firefox/"* ]]; then
+  FF_PROFILE_TYPE="snap"
+elif [[ "\$FF_PROFILE_SOURCE_DIR" == *".var/app/org.mozilla.firefox"* ]]; then
+  FF_PROFILE_TYPE="flatpak"
+elif [[ "\$FF_PROFILE_SOURCE_DIR" == *".mozilla"* ]]; then
+  FF_PROFILE_TYPE="traditional"
+fi
+
+# Create a file to indicate the Firefox profile type
+echo "\$FF_PROFILE_TYPE" > "\$TEMPLATE_DIR/.firefox_profile_type"
+
 # Copy Firefox profile if it exists
 if [ -d "\$TEMPLATE_DIR/.mozilla" ]; then
   echo "\$(date): Copying Firefox profile from template..." >> "\$LOGFILE"
   rm -rf ~/.mozilla  # Remove any existing profile
   cp -r "\$TEMPLATE_DIR/.mozilla" ~/
+  
+  # Get the Firefox profile type
+  FF_PROFILE_TYPE="unknown"
+  if [ -f "\$TEMPLATE_DIR/.firefox_profile_type" ]; then
+    FF_PROFILE_TYPE=\$(cat "\$TEMPLATE_DIR/.firefox_profile_type")
+  fi
+  
+  # Ensure proper ownership of Firefox profile directories
   chmod -R 700 ~/.mozilla
+  
+  # Handle Flatpak Firefox installation
+  if [ "\$FF_PROFILE_TYPE" = "flatpak" ]; then
+    echo "\$(date): Setting up Flatpak Firefox directories..." >> "\$LOGFILE"
+    # Create .var directory structure if it doesn't exist
+    mkdir -p ~/.var/app/org.mozilla.firefox
+    # Set proper ownership and permissions
+    chmod -R 700 ~/.var
+  fi
 fi
 
 # Copy desktop shortcuts if they exist
