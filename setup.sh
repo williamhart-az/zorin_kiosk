@@ -72,7 +72,63 @@ run_with_logging() {
   fi
 }
 
+# Function to ensure all scripts have execution permissions
+ensure_script_permissions() {
+  log_message "Checking and setting execution permissions for all scripts" "INFO"
+  
+  # Make kiosk_setup.sh executable
+  if [ -f "./kiosk_setup.sh" ]; then
+    chmod 755 ./kiosk_setup.sh
+    log_message "Set execution permission for kiosk_setup.sh" "DEBUG"
+  else
+    log_message "Warning: kiosk_setup.sh not found" "WARN"
+  fi
+  
+  # Check if features directory exists
+  if [ ! -d "./features" ]; then
+    log_message "Error: Features directory not found" "ERROR"
+    echo "[ERROR] Features directory not found. Please ensure you're running this script from the correct location."
+    exit 1
+  fi
+  
+  # Make all scripts in features directory executable
+  log_message "Setting execution permissions for all scripts in features directory" "DEBUG"
+  find ./features -name "*.sh" -type f -exec chmod 755 {} \;
+  
+  # Verify permissions were set correctly
+  local failed_scripts=()
+  
+  # Check kiosk_setup.sh
+  if [ -f "./kiosk_setup.sh" ] && [ ! -x "./kiosk_setup.sh" ]; then
+    failed_scripts+=("kiosk_setup.sh")
+  fi
+  
+  # Check all scripts in features directory
+  for script in ./features/*.sh; do
+    if [ -f "$script" ] && [ ! -x "$script" ]; then
+      failed_scripts+=("$script")
+    fi
+  done
+  
+  # Report any failures
+  if [ ${#failed_scripts[@]} -gt 0 ]; then
+    log_message "Failed to set execution permissions for some scripts" "ERROR"
+    echo "[ERROR] Failed to set execution permissions for the following scripts:"
+    for script in "${failed_scripts[@]}"; do
+      echo "  - $script"
+    done
+    echo "Please ensure you have sufficient permissions to modify these files."
+    exit 1
+  fi
+  
+  log_message "All scripts now have proper execution permissions" "INFO"
+}
+
 # Menu items and their initial states (0 = OFF, 1 = ON)
+
+# First, ensure all scripts have proper execution permissions
+ensure_script_permissions
+
 menu_items=(
     "Setup WiFi"
     "Create Firefox Profile Sync"
