@@ -65,12 +65,33 @@ mkdir -p "$TEMPLATE_DIR/Documents"
 mkdir -p "$TEMPLATE_DIR/.config/autostart"
 mkdir -p "$TEMPLATE_DIR/.local/share/applications"
 
-# Copy Firefox profile if it exists
-if [ -d "/home/$ADMIN_USERNAME/.mozilla" ]; then
-  echo "\$(date): Copying Firefox profile to template..." >> "\$LOGFILE"
-  rm -rf "$TEMPLATE_DIR/.mozilla"  # Remove existing profile
-  cp -r "/home/$ADMIN_USERNAME/.mozilla" "$TEMPLATE_DIR/"
+# Determine Firefox profile directory for $ADMIN_USERNAME
+# Note: $ADMIN_USERNAME and $TEMPLATE_DIR below are expanded when master_profile.sh generates save_admin_changes.sh.
+# The \$ prefixed variables are for the save_admin_changes.sh script itself when it runs.
+\$FF_PROFILE_DIR_SNAP="/home/$ADMIN_USERNAME/snap/firefox/common/.mozilla"
+\$FF_PROFILE_DIR_FLATPAK="/home/$ADMIN_USERNAME/.var/app/org.mozilla.firefox/.mozilla"
+\$FF_PROFILE_DIR_TRADITIONAL="/home/$ADMIN_USERNAME/.mozilla" # Original path
+\$FF_PROFILE_SOURCE_DIR=""
+
+if [ -d "\$FF_PROFILE_DIR_SNAP" ]; then
+  \$FF_PROFILE_SOURCE_DIR="\$FF_PROFILE_DIR_SNAP"
+  echo "\$(date): Found Firefox Snap profile at \$FF_PROFILE_SOURCE_DIR for user $ADMIN_USERNAME" >> "\$LOGFILE"
+elif [ -d "\$FF_PROFILE_DIR_FLATPAK" ]; then
+  \$FF_PROFILE_SOURCE_DIR="\$FF_PROFILE_DIR_FLATPAK"
+  echo "\$(date): Found Firefox Flatpak profile at \$FF_PROFILE_SOURCE_DIR for user $ADMIN_USERNAME" >> "\$LOGFILE"
+elif [ -d "\$FF_PROFILE_DIR_TRADITIONAL" ]; then
+  \$FF_PROFILE_SOURCE_DIR="\$FF_PROFILE_DIR_TRADITIONAL"
+  echo "\$(date): Found Firefox traditional profile at \$FF_PROFILE_SOURCE_DIR for user $ADMIN_USERNAME" >> "\$LOGFILE"
+fi
+
+# Copy Firefox profile if a source directory was found
+if [ -n "\$FF_PROFILE_SOURCE_DIR" ]; then
+  echo "\$(date): Copying Firefox profile from \$FF_PROFILE_SOURCE_DIR to $TEMPLATE_DIR/.mozilla..." >> "\$LOGFILE"
+  rm -rf "$TEMPLATE_DIR/.mozilla"  # Remove existing profile first
+  cp -r "\$FF_PROFILE_SOURCE_DIR" "$TEMPLATE_DIR/.mozilla" # Copies the found profile dir and names the copy '.mozilla'
   chmod -R 755 "$TEMPLATE_DIR/.mozilla"
+else
+  echo "\$(date): Firefox profile directory not found for user $ADMIN_USERNAME. Searched Snap, Flatpak, and traditional paths." >> "\$LOGFILE"
 fi
 
 # Copy desktop shortcuts
