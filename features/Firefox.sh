@@ -51,7 +51,16 @@ cat > "$FIREFOX_PROFILE_SCRIPT" << EOF
 #!/bin/bash
 
 # Script to set up Firefox profile for kiosk user
-LOGFILE="/tmp/firefox_profile_setup.log"
+set -e # Ensures the script will exit immediately if any command fails
+
+: \${KIOSK_USERNAME:="\$(whoami)"}
+
+KIOSK_USER_HOME_DIR="/home/\$KIOSK_USERNAME"
+LOG_DIR="\$KIOSK_USER_HOME_DIR/.cache/kiosk_setup"
+LOGFILE="\$LOG_DIR/firefox_profile_setup.log"
+
+# Create log directory
+mkdir -p "\$LOG_DIR"
 echo "\$(date): Setting up Firefox profile..." >> "\$LOGFILE"
 
 # Detect Firefox installation type
