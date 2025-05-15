@@ -1,0 +1,51 @@
+11:58:56 check-new-relea: WARNING:root:timeout reached, exiting
+11:58:40 dbus-daemon: [session uid=1001 pid=821] Successfully activated service 'org.gnome.Shell.HotplugSniffer'
+11:58:35 systemd: Started Application launched by gnome-session-binary.
+11:58:07 gnome-software: g_object_unref: assertion 'G_IS_OBJECT (object)' failed
+11:58:06 dbus-daemon: [session uid=1001 pid=821] Successfully activated service 'org.gnome.Logs'
+11:57:51 systemd: Started Tracker metadata extractor.
+11:57:51 dbus-daemon: [session uid=1001 pid=821] Successfully activated service 'org.freedesktop.Tracker3.Miner.Extract'
+11:57:51 systemd: Starting Tracker metadata extractor...
+11:57:51 dbus-daemon: [session uid=1001 pid=821] Activating via systemd: service name='org.freedesktop.Tracker3.Miner.Extract' unit='tracker-extract-3.service' requested by ':1.83' (uid=1001 pid=1484 comm="/usr/libexec/tracker-miner-fs-3 " label="unconfined")
+11:57:47 nautilus: Could not delete '.meta.isrunning': No such file or directory
+11:57:43 flatpak: error: mkdir(/home/kiosk/.var/app/org.mozilla.firefox/data): Permission denied
+11:57:43 systemd: Started Application launched by gnome-shell.
+11:57:37 gnome-shell: DING: DBus interface for Nautilus (org.freedesktop.FileManager1) is now available.
+11:57:37 dbus-daemon: [session uid=1001 pid=821] Successfully activated service 'org.gnome.NautilusPreviewer'
+11:57:37 gnome-shell: DING: GNOME nautilus 42.6
+11:57:36 dbus-daemon: [session uid=1001 pid=821] Successfully activated service 'org.gnome.ArchiveManager1'
+11:57:36 gnome-shell: DING: @/usr/share/gnome-shell/extensions/zorin-desktop-icons@zorinos.com/app/ding.js:206:13
+11:57:36 dbus-daemon: [session uid=1001 pid=821] Activated service 'org.freedesktop.FileManager1' failed: Process org.freedesktop.FileManager1 exited with status 1
+11:57:36 nautilus: Failed to register: Unable to acquire bus name 'org.gnome.Nautilus'
+11:57:36 gnome-shell: DING: Detected async api for thumbnails
+11:57:36 dbus-daemon: [session uid=1001 pid=821] Activating service name='org.gnome.ArchiveManager1' requested by ':1.92' (uid=1001 pid=1587 comm="gjs /usr/share/gnome-shell/extensions/zorin-deskto" label="unconfined")
+11:57:36 gnome-software: Failed to load proxy settings: GDBus.Error:org.gtk.GDBus.UnmappedGError.Quark._pk_2dengine_2derror_2dquark.Code3: setting the proxy failed: failed to get the uid
+11:57:36 gnome-shell: Launching DING process
+11:57:36 touchegg: Connection with Touchégg established
+11:57:36 xset: server does not have extension for -dpms option
+11:57:36 gnome-shell: ATK Bridge is disabled but a11y has already been enabled.
+11:57:36 systemd: Reached target GNOME session X11 services.
+11:57:36 dbus-daemon: [session uid=1001 pid=821] Successfully activated service 'org.freedesktop.portal.Desktop'
+11:57:36 systemd: Started Portal service (GTK/GNOME implementation).
+11:57:36 dbus-daemon: [session uid=1001 pid=821] Successfully activated service 'org.freedesktop.impl.portal.desktop.gtk'
+11:57:36 systemd: Started Tracker file system data miner.
+11:57:36 dbus-daemon: [session uid=1001 pid=821] Activating via systemd: service name='org.freedesktop.impl.portal.desktop.gtk' unit='xdg-desktop-portal-gtk.service' requested by ':1.73' (uid=1001 pid=1451 comm="/usr/libexec/xdg-desktop-portal " label="unconfined")
+11:57:36 systemd: Started Portal service (GNOME implementation).
+11:57:36 dbus-daemon: [session uid=1001 pid=821] Successfully activated service 'org.freedesktop.impl.portal.desktop.gnome'
+11:57:36 xkbcomp: Errors from xkbcomp are not fatal to the X server
+11:57:36 systemd: Starting GNOME XSettings service...
+11:57:36 dbus-daemon: [session uid=1001 pid=821] Successfully activated service 'org.gnome.ScreenSaver'
+11:57:36 gsd-color: no xrandr-Dell Inc.-OptiPlex 5260-0x002206f2 device found: Failed to find output xrandr-Dell Inc.-OptiPlex 5260-0x002206f2
+11:57:36 dbus-daemon: [session uid=1001 pid=821] Activating service name='org.gnome.ScreenSaver' requested by ':1.56' (uid=1001 pid=1183 comm="/usr/libexec/gsd-power " label="unconfined")
+11:57:36 gsd-media-keys: Failed to grab accelerator for keybinding settings:playback-repeat
+11:57:36 systemd: Starting Tracker file system data miner...
+11:57:35 dbus-daemon: [session uid=1001 pid=821] Activating via systemd: service name='org.freedesktop.impl.portal.desktop.gnome' unit='xdg-desktop-portal-gnome.service' requested by ':1.73' (uid=1001 pid=1451 comm="/usr/libexec/xdg-desktop-portal " label="unconfined")
+11:57:35 systemd: Started flatpak document portal service.
+11:57:35 dbus-daemon: [session uid=1001 pid=821] Successfully activated service 'org.freedesktop.portal.Documents'
+11:57:35 systemd: Starting flatpak document portal service...
+11:57:35 dbus-daemon: [session uid=1001 pid=821] Activating via systemd: service name='org.freedesktop.portal.Documents' unit='xdg-document-portal.service' requested by ':1.73' (uid=1001 pid=1451 comm="/usr/libexec/xdg-desktop-portal " label="unconfined")
+11:57:35 systemd: Starting Portal service...
+11:57:35 dbus-daemon: [session uid=1001 pid=821] Activating via systemd: service name='org.freedesktop.portal.Desktop' unit='xdg-desktop-portal.service' requested by ':1.63' (uid=1001 pid=1231 comm="/usr/bin/gnome-software --gapplication-service " label="unconfined")
+11:57:35 systemd: Reached target GNOME printer notifications target.
+11:57:35 gnome-shell: Error looking up permission: GDBus.Error:org.freedesktop.portal.Error.NotFound: No entry for geolocation
+11:57:35 Xwayland: Please use "-listenfd" instead.

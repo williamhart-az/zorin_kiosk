@@ -136,6 +136,13 @@ EOL
 echo "\$(date): Created Firefox preferences" >> "\$LOGFILE"
 
 # Set correct permissions
+# Ensure PROFILE_BASE_DIR itself is owned by the kiosk user
+if [ -d "\$PROFILE_BASE_DIR" ]; then
+    chown \$KIOSK_USERNAME:\$KIOSK_USERNAME "\$PROFILE_BASE_DIR"
+    chmod 700 "\$PROFILE_BASE_DIR"
+    echo "\$(date): Ensured ownership and permissions (700) for \$PROFILE_BASE_DIR" >> "\$LOGFILE"
+fi
+
 chown -R $KIOSK_USERNAME:$KIOSK_USERNAME "\$PROFILE_BASE_DIR/.mozilla"
 chmod -R 700 "\$PROFILE_BASE_DIR/.mozilla"
 
