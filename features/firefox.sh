@@ -58,7 +58,7 @@ if [ ! -d "$KIOSK_USER_HOME/.var" ]; then
     mkdir -p "$KIOSK_USER_HOME/.var"
     echo "[DEBUG] Created $KIOSK_USER_HOME/.var"
 fi
-chown "$KIOSK_USERNAME:$KIOSK_USERNAME" "$KIOSK_USER_HOME/.var"
+chown -R "$KIOSK_USERNAME:$KIOSK_USERNAME" "$KIOSK_USER_HOME/.var"
 chmod 700 "$KIOSK_USER_HOME/.var"
 echo "[DEBUG] Set ownership and permissions for $KIOSK_USER_HOME/.var"
 
