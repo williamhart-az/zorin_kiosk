@@ -72,7 +72,7 @@ if [ ! -d "$KIOSK_USER_HOME/.var/app/org.mozilla.firefox" ]; then
 fi
 echo "[DEBUG] Fixing ownership of $KIOSK_USER_HOME/.var/app/org.mozilla.firefox"
 chown -R "$KIOSK_USERNAME:$KIOSK_USERNAME" "$KIOSK_USER_HOME/.var/app/org.mozilla.firefox"
-chmod 700 "$KIOSK_USER_HOME/.var/app/org.mozilla.firefox"  # Use 700 for Firefox directory for privacy
+chmod -R 700 "$KIOSK_USER_HOME/.var/app/org.mozilla.firefox"  # Use 700 for Firefox directory for privacy
 
 # Fix ownership of .mozilla directory
 if [ -d "$KIOSK_USER_HOME/.mozilla" ]; then
@@ -101,7 +101,7 @@ Before=display-manager.service
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c "mkdir -p /home/$KIOSK_USERNAME/.var/app/org.mozilla.firefox && chown -R $KIOSK_USERNAME:$KIOSK_USERNAME /home/$KIOSK_USERNAME/.var && chmod 755 /home/$KIOSK_USERNAME/.var && chown $KIOSK_USERNAME:$KIOSK_USERNAME /home/$KIOSK_USERNAME/.var/app && chmod 755 /home/$KIOSK_USERNAME/.var/app && chown -R $KIOSK_USERNAME:$KIOSK_USERNAME /home/$KIOSK_USERNAME/.var/app/org.mozilla.firefox && chmod 700 /home/$KIOSK_USERNAME/.var/app/org.mozilla.firefox && chown -R $KIOSK_USERNAME:$KIOSK_USERNAME /home/$KIOSK_USERNAME/.mozilla 2>/dev/null || true && chown -R $KIOSK_USERNAME:$KIOSK_USERNAME /home/$KIOSK_USERNAME/snap/firefox 2>/dev/null || true"
+ExecStart=/bin/bash -c "mkdir -p /home/$KIOSK_USERNAME/.var/app/org.mozilla.firefox && chown -R $KIOSK_USERNAME:$KIOSK_USERNAME /home/$KIOSK_USERNAME/.var && chmod 755 /home/$KIOSK_USERNAME/.var && chown -R $KIOSK_USERNAME:$KIOSK_USERNAME /home/$KIOSK_USERNAME/.var/app && chmod 755 /home/$KIOSK_USERNAME/.var/app && chown -R $KIOSK_USERNAME:$KIOSK_USERNAME /home/$KIOSK_USERNAME/.var/app/org.mozilla.firefox && chmod -R 700 /home/$KIOSK_USERNAME/.var/app/org.mozilla.firefox && chown -R $KIOSK_USERNAME:$KIOSK_USERNAME /home/$KIOSK_USERNAME/.mozilla 2>/dev/null || true && chown -R $KIOSK_USERNAME:$KIOSK_USERNAME /home/$KIOSK_USERNAME/snap/firefox 2>/dev/null || true"
 RemainAfterExit=yes
 
 [Install]

@@ -75,8 +75,8 @@ if [ ! -d "$FLATPAK_FIREFOX_PROFILE_DIR" ]; then
     mkdir -p "$FLATPAK_FIREFOX_PROFILE_DIR"
     echo "[DEBUG] Created $FLATPAK_FIREFOX_PROFILE_DIR"
 fi
-chown "$KIOSK_USERNAME:$KIOSK_USERNAME" "$FLATPAK_FIREFOX_PROFILE_DIR"
-chmod 700 "$FLATPAK_FIREFOX_PROFILE_DIR"
+chown -R "$KIOSK_USERNAME:$KIOSK_USERNAME" "$FLATPAK_FIREFOX_PROFILE_DIR"
+chmod -R 700 "$FLATPAK_FIREFOX_PROFILE_DIR"
 echo "[DEBUG] Set ownership and permissions for $FLATPAK_FIREFOX_PROFILE_DIR"
 
 # Create and permission the standard Firefox profile parent directory

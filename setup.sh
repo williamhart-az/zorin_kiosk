@@ -135,6 +135,7 @@ menu_items=(
     "Fix Firefox Profile.ini"
     "Fix Firefox Ownership"
     "Fix ~/var Ownership"
+    "Periodic Firefox Fix"
     "Clone Admin Profile" 
     "Never Sleep Screen"   
     "Use Temporary File System"
@@ -149,13 +150,14 @@ script_names=(
     "firefox_profile_fix.sh"
     "firefox_ownership_fix.sh"
     "var_ownership_fix.sh"
+    "firefox_periodic_fix.sh"
     "master_profile.sh"
     "idle_delay.sh"
     "tmpfs.sh"
     "scheduled_reboot.sh"
 )
 # Initial states for all features (0 = OFF, 1 = ON)
-states=(1 1 1 1 1 1 1 1 1 0 0)  # Default all features ON
+states=(1 1 1 1 1 1 1 1 1 1 0 0)  # Default all features ON
 selected=0
 total_items=${#menu_items[@]}
 feature_count=$((total_items-2))  # Number of actual features (excluding Run All and Cancel)
