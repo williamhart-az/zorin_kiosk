@@ -140,6 +140,7 @@ menu_items=(
     "Never Sleep Screen"   
     "Use Temporary File System"
     "Reboot Interval"
+    "Uninstall Kiosk Setup"
     "Run All ON" 
     "Cancel"
 )
@@ -155,9 +156,10 @@ script_names=(
     "idle_delay.sh"
     "tmpfs.sh"
     "scheduled_reboot.sh"
+    "uninstall.sh"
 )
 # Initial states for all features (0 = OFF, 1 = ON)
-states=(1 1 1 1 1 1 1 1 1 1 0 0)  # Default all features ON
+states=(1 1 1 1 1 1 1 1 1 1 0 0 0)  # Default all features ON, uninstall OFF
 selected=0
 total_items=${#menu_items[@]}
 feature_count=$((total_items-2))  # Number of actual features (excluding Run All and Cancel)
