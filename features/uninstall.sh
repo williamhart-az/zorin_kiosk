@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # ZorinOS Kiosk Uninstall Script
+# Note: This script does NOT require user_setup.sh to run first
 
 # Exit on any error
 set -e
@@ -46,6 +47,11 @@ echo "[DEBUG] Environment file sourced successfully"
 KIOSK_USER_HOME="/home/$KIOSK_USERNAME"
 
 echo "[INFO] Starting uninstallation of ZorinOS Kiosk setup..."
+echo "[WARNING] This will remove all kiosk-related configurations and services."
+echo "[WARNING] You will be asked if you want to remove the kiosk user account."
+echo ""
+echo "Press Enter to continue or Ctrl+C to cancel..."
+read
 
 # 1. Disable and remove systemd services
 echo "[INFO] Disabling and removing systemd services..."

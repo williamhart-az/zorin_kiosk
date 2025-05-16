@@ -69,9 +69,11 @@ To uninstall the kiosk setup:
 sudo ./setup.sh
 ```
 
-2. In the menu, select "Uninstall Kiosk Setup" and press Enter.
+2. In the menu, select "Uninstall Kiosk Setup" and toggle it to ON (it will automatically set all other features to OFF).
 
-3. Follow the prompts to complete the uninstallation process.
+3. Press Enter to run the uninstall process or select "Run All ON" to execute it.
+
+4. Follow the prompts to complete the uninstallation process.
 
 The uninstall process will:
 - Disable and remove all systemd services created during installation
@@ -81,7 +83,7 @@ The uninstall process will:
 - Optionally remove the kiosk user account
 - Disable autologin configurations
 
-4. Reboot your system to apply the changes:
+5. Reboot your system to apply the changes:
 ```
 sudo reboot
 ```

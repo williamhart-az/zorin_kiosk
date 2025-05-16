@@ -170,16 +170,25 @@ draw_menu() {
     echo "Up/Down: Select item | Left/Right/Space: Toggle ON/OFF"
     echo "Enter on feature: Run only that feature (if ON) | 'Run All ON': Run all ON features | 'Cancel': Exit"
     echo "--------------------------------"
-    echo "Note: features/user_setup.sh will always run (required for Kiosk user creation)"
+    echo "Note: features/user_setup.sh will always run (required for Kiosk user creation) unless Uninstall is ON"
     echo "--------------------------------"
     for i in "${!menu_items[@]}"; do
         if [ $i -eq $selected ]; then
             tput setaf 2  # Green for selected item
             if [ $i -lt $feature_count ]; then  # Only show state for features
-                if [ "${states[$i]}" -eq 1 ]; then
-                    echo "> ${menu_items[$i]} [ON]"
+                if [ $i -eq 10 ]; then  # Uninstall option
+                    if [ "${states[$i]}" -eq 1 ]; then
+                        tput setaf 1  # Red for uninstall when ON
+                        echo "> ${menu_items[$i]} [ON]"
+                    else
+                        echo "> ${menu_items[$i]} [OFF]"
+                    fi
                 else
-                    echo "> ${menu_items[$i]} [OFF]"
+                    if [ "${states[$i]}" -eq 1 ]; then
+                        echo "> ${menu_items[$i]} [ON]"
+                    else
+                        echo "> ${menu_items[$i]} [OFF]"
+                    fi
                 fi
             else
                 echo "> ${menu_items[$i]}"
@@ -187,10 +196,20 @@ draw_menu() {
             tput sgr0     # Reset color
         else
             if [ $i -lt $feature_count ]; then
-                if [ "${states[$i]}" -eq 1 ]; then
-                    echo "  ${menu_items[$i]} [ON]"
+                if [ $i -eq 10 ]; then  # Uninstall option
+                    if [ "${states[$i]}" -eq 1 ]; then
+                        tput setaf 1  # Red for uninstall when ON
+                        echo "  ${menu_items[$i]} [ON]"
+                        tput sgr0     # Reset color
+                    else
+                        echo "  ${menu_items[$i]} [OFF]"
+                    fi
                 else
-                    echo "  ${menu_items[$i]} [OFF]"
+                    if [ "${states[$i]}" -eq 1 ]; then
+                        echo "  ${menu_items[$i]} [ON]"
+                    else
+                        echo "  ${menu_items[$i]} [OFF]"
+                    fi
                 fi
             else
                 echo "  ${menu_items[$i]}"
@@ -206,6 +225,13 @@ toggle_state() {
             states[$selected]=0
         else
             states[$selected]=1
+            
+            # If uninstall is being turned ON, turn all other features OFF
+            if [ $selected -eq 10 ]; then  # Uninstall is at index 10
+                for i in $(seq 0 9); do
+                    states[$i]=0
+                done
+            fi
         fi
     fi
 }
@@ -215,16 +241,38 @@ run_single_feature() {
     echo "=== Running Single Feature ==="
     echo "Selected feature: ${menu_items[$selected]}"
     echo "--------------------------------"
-    if [ ${states[$selected]} -eq 1 ]; then
-        script_path="features/${script_names[$selected]}"
-        log_message "Running single feature: ${menu_items[$selected]}" "INFO"
-        run_with_logging "$script_path enable" "${menu_items[$selected]}" "${script_names[$selected]}"
-        echo "--------------------------------"
-        echo "Execution complete!"
+    
+    # Special handling for uninstall feature
+    if [ $selected -eq 10 ]; then  # Uninstall is at index 10
+        if [ ${states[$selected]} -eq 1 ]; then
+            script_path="features/${script_names[$selected]}"
+            log_message "Running uninstall: ${menu_items[$selected]}" "INFO"
+            run_with_logging "$script_path enable" "${menu_items[$selected]}" "${script_names[$selected]}"
+            echo "--------------------------------"
+            echo "Uninstall complete!"
+        else
+            echo "Feature is OFF - nothing to run."
+            log_message "Feature ${menu_items[$selected]} is OFF - nothing to run" "DEBUG"
+        fi
     else
-        echo "Feature is OFF - nothing to run."
-        log_message "Feature ${menu_items[$selected]} is OFF - nothing to run" "DEBUG"
+        # For non-uninstall features
+        if [ ${states[$selected]} -eq 1 ]; then
+            # Run user_setup.sh first if this is not the uninstall feature
+            log_message "Running required user setup" "INFO"
+            run_with_logging "features/user_setup.sh enable" "User Setup" "user_setup.sh"
+            
+            # Then run the selected feature
+            script_path="features/${script_names[$selected]}"
+            log_message "Running single feature: ${menu_items[$selected]}" "INFO"
+            run_with_logging "$script_path enable" "${menu_items[$selected]}" "${script_names[$selected]}"
+            echo "--------------------------------"
+            echo "Execution complete!"
+        else
+            echo "Feature is OFF - nothing to run."
+            log_message "Feature ${menu_items[$selected]} is OFF - nothing to run" "DEBUG"
+        fi
     fi
+    
     echo "Press Enter to return to menu"
     read
 }
@@ -234,24 +282,41 @@ run_all_on() {
     echo "=== Executing All ON Features ==="
     echo "The following features are set to ON and will be executed:"
     echo "--------------------------------"
-    echo "- features/user-setup.sh (always runs)"
+    
+    # Check if uninstall is ON
+    local uninstall_on=0
+    if [ ${states[10]} -eq 1 ]; then  # Uninstall is at index 10
+        uninstall_on=1
+        echo "- Uninstall Kiosk Setup"
+    else
+        echo "- features/user-setup.sh (always runs)"
+    fi
+    
     local has_on=0
     for i in $(seq 0 $((feature_count-1))); do  # Check all features
+        # Skip uninstall in this loop as we've already handled it
+        if [ $i -eq 10 ]; then
+            continue
+        fi
+        
         if [ ${states[$i]} -eq 1 ]; then
             echo "- ${menu_items[$i]}"
             has_on=1
         fi
     done
-    if [ $has_on -eq 0 ]; then
+    if [ $has_on -eq 0 ] && [ $uninstall_on -eq 0 ]; then
         echo "(No additional features are ON)"
     fi
     echo "--------------------------------"
     
-    # Always run the user_setup.sh script
-    log_message "Running required user setup" "INFO"
-    run_with_logging "features/user_setup.sh enable" "User Setup" "user_setup.sh"
+    # If uninstall is ON, don't run user_setup.sh
+    if [ $uninstall_on -eq 0 ]; then
+        # Always run the user_setup.sh script
+        log_message "Running required user setup" "INFO"
+        run_with_logging "features/user_setup.sh enable" "User Setup" "user_setup.sh"
+    fi
     
-    if [ $has_on -eq 1 ]; then
+    if [ $has_on -eq 1 ] || [ $uninstall_on -eq 1 ]; then
         log_message "Executing additional features..." "DEBUG"
         echo "Executing additional features..."
         echo "--------------------------------"
