@@ -1,21 +1,120 @@
 #!/bin/bash
 
-# Master Profile Feature Script
-# This script handles cloning the master profile desktop and desktop icons to the kiosk user via the template directory
+enable_feature() {
+    echo "Cloning Firefox profile for kiosk user..."
 
-# Configuration variables - these should match your main configuration
-KIOSK_USERNAME="kiosk"
-ADMIN_USERNAME="alocalbox"  # Admin username
+    # Source profile location (admin user)
+    SOURCE_PROFILE_DIR="$HOME/.mozilla/firefox"
+    SOURCE_PROFILES_INI="$SOURCE_PROFILE_DIR/profiles.ini"
 
-# Script directories
-OPT_KIOSK_DIR="/opt/kiosk"
-TEMPLATE_DIR="$OPT_KIOSK_DIR/templates"
+    # Destination profile location (kiosk user)
+    KIOSK_HOME="/home/kiosk"
+    DEST_PROFILE_DIR="$KIOSK_HOME/.mozilla/firefox"
 
-# Create template directories if they don't exist
-mkdir -p "$TEMPLATE_DIR/Desktop"
-mkdir -p "$TEMPLATE_DIR/Documents"
-mkdir -p "$TEMPLATE_DIR/.config/autostart"
-mkdir -p "$TEMPLATE_DIR/.local/share/applications"
+    # Create directories if they don't exist
+    mkdir -p "$DEST_PROFILE_DIR"
+
+    # 1. First, identify the default profile from profiles.ini
+    if [ -f "$SOURCE_PROFILES_INI" ]; then
+        # Extract the default profile path
+        DEFAULT_PROFILE=$(grep -A 10 "Default=1" "$SOURCE_PROFILES_INI" | grep "Path=" | head -1 | cut -d= -f2)
+
+        if [ -z "$DEFAULT_PROFILE" ]; then
+            # If no default profile found, try to get the first profile
+            DEFAULT_PROFILE=$(grep "Path=" "$SOURCE_PROFILES_INI" | head -1 | cut -d= -f2)
+        fi
+
+        if [ -n "$DEFAULT_PROFILE" ]; then
+            SOURCE_PROFILE_PATH="$SOURCE_PROFILE_DIR/$DEFAULT_PROFILE"
+            echo "Found source profile: $SOURCE_PROFILE_PATH"
+
+            # 2. Create a new profile for kiosk
+            KIOSK_PROFILE_NAME="kiosk.default"
+            KIOSK_PROFILE_PATH="$DEST_PROFILE_DIR/$KIOSK_PROFILE_NAME"
+
+            # Create the profile directory
+            mkdir -p "$KIOSK_PROFILE_PATH"
+
+            # 3. Copy profile contents
+            echo "Copying profile contents..."
+            cp -r "$SOURCE_PROFILE_PATH"/* "$KIOSK_PROFILE_PATH/"
+
+            # 4. Create/update profiles.ini for kiosk user with modern format
+            cat > "$DEST_PROFILE_DIR/profiles.ini" << EOF
+[Profile0]
+Name=default
+IsRelative=1
+Path=$KIOSK_PROFILE_NAME
+Default=1
+
+[General]
+StartWithLastProfile=1
+Version=2
+
+[Install]
+DefaultProfile=$KIOSK_PROFILE_NAME
+EOF
+
+            # Also create profiles.ini in Flatpak location if needed
+            if [ -d "$KIOSK_HOME/.var/app/org.mozilla.firefox" ]; then
+                mkdir -p "$KIOSK_HOME/.var/app/org.mozilla.firefox/.mozilla/firefox"
+                cat > "$KIOSK_HOME/.var/app/org.mozilla.firefox/.mozilla/firefox/profiles.ini" << EOF
+[Profile0]
+Name=default
+IsRelative=1
+Path=$KIOSK_PROFILE_NAME
+Default=1
+
+[General]
+StartWithLastProfile=1
+Version=2
+
+[Install]
+DefaultProfile=$KIOSK_PROFILE_NAME
+EOF
+            fi
+
+            # 5. Ensure user.js is in the profile directory
+            if [ -f "/opt/kiosk/user.js" ]; then
+                echo "Copying user.js to profile..."
+                cp "/opt/kiosk/user.js" "$KIOSK_PROFILE_PATH/user.js"
+            else
+                echo "Warning: user.js not found in /opt/kiosk/"
+            fi
+
+            # 6. Set proper ownership
+            chown -R kiosk:kiosk "$KIOSK_HOME/.mozilla"
+
+            echo "Firefox profile successfully cloned for kiosk user"
+        else
+            echo "Error: Could not find a Firefox profile to clone"
+            exit 1
+        fi
+    else
+        echo "Error: Source profiles.ini not found at $SOURCE_PROFILES_INI"
+        exit 1
+    fi
+}
+
+disable_feature() {
+    echo "Removing Firefox profile for kiosk user..."
+    rm -rf "/home/kiosk/.mozilla/firefox"
+}
+
+case "$1" in
+    enable)
+        enable_feature
+        ;;
+    disable)
+        disable_feature
+        ;;
+    *)
+        echo "Usage: $0 {enable|disable}"
+        exit 1
+        ;;
+esac
+
+exit 0
 
 # Function to save admin changes to the template directory
 save_admin_changes() {

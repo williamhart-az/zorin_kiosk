@@ -131,7 +131,7 @@ PROFILE_NAME="default-\$(head /dev/urandom | tr -dc a-z0-9 | head -c 8)"
 PROFILE_DIR="\$PROFILE_BASE_DIR/.mozilla/firefox/\$PROFILE_NAME"
 mkdir -p "\$PROFILE_DIR"
 
-# Create profiles.ini file
+# Create profiles.ini file with modern format
 cat > "\$PROFILE_BASE_DIR/.mozilla/firefox/profiles.ini" << EOL
 [Profile0]
 Name=default
@@ -142,7 +142,29 @@ Default=1
 [General]
 StartWithLastProfile=1
 Version=2
+
+[Install]
+DefaultProfile=$PROFILE_NAME
 EOL
+
+# If Firefox is installed as Flatpak, also create the profile.ini in the Flatpak location
+if [ "\$FIREFOX_FLATPAK" = "true" ]; then
+  mkdir -p "\$PROFILE_BASE_DIR/.var/app/org.mozilla.firefox/.mozilla/firefox"
+  cat > "\$PROFILE_BASE_DIR/.var/app/org.mozilla.firefox/.mozilla/firefox/profiles.ini" << EOL
+[Profile0]
+Name=default
+IsRelative=1
+Path=$PROFILE_NAME
+Default=1
+
+[General]
+StartWithLastProfile=1
+Version=2
+
+[Install]
+DefaultProfile=$PROFILE_NAME
+EOL
+fi
 
 echo "\$(date): Created profile: \$PROFILE_NAME" >> "\$LOGFILE"
 

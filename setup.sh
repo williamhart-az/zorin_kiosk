@@ -132,6 +132,7 @@ ensure_script_permissions
 menu_items=(
     "Setup WiFi"
     "Create Firefox Profile Sync"
+    "Fix Firefox Profile.ini"
     "Clone Admin Profile" 
     "Never Sleep Screen"   
     "Use Temporary File System"
@@ -143,13 +144,14 @@ menu_items=(
 script_names=(
     "wifi.sh"
     "firefox.sh"
+    "firefox_profile_fix.sh"
     "master_profile.sh"
     "idle_delay.sh"
     "tmpfs.sh"
     "scheduled_reboot.sh"
 )
 # Initial states for all features (0 = OFF, 1 = ON)
-states=(1 1 1 1 1 1 0 0)  # Default all features ON
+states=(1 1 1 1 1 1 1 0 0)  # Default all features ON
 selected=0
 total_items=${#menu_items[@]}
 feature_count=$((total_items-2))  # Number of actual features (excluding Run All and Cancel)
