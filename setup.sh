@@ -142,9 +142,9 @@ menu_items=(
 # Script names corresponding to menu items
 script_names=(
     "wifi.sh"
-    "Firefox.sh"
-    "master-profile.sh"
-    "idle-delay.sh"
+    "firefox.sh"
+    "master_profile.sh"
+    "idle_delay.sh"
     "tmpfs.sh"
     "scheduled_reboot.sh"
 )
@@ -160,7 +160,7 @@ draw_menu() {
     echo "Up/Down: Select item | Left/Right/Space: Toggle ON/OFF"
     echo "Enter on feature: Run only that feature (if ON) | 'Run All ON': Run all ON features | 'Cancel': Exit"
     echo "--------------------------------"
-    echo "Note: features/user-setup.sh will always run (required for Kiosk user creation)"
+    echo "Note: features/user_setup.sh will always run (required for Kiosk user creation)"
     echo "--------------------------------"
     for i in "${!menu_items[@]}"; do
         if [ $i -eq $selected ]; then
@@ -237,9 +237,9 @@ run_all_on() {
     fi
     echo "--------------------------------"
     
-    # Always run the user-setup.sh script
+    # Always run the user_setup.sh script
     log_message "Running required user setup" "INFO"
-    run_with_logging "features/user-setup.sh enable" "User Setup" "user-setup.sh"
+    run_with_logging "features/user_setup.sh enable" "User Setup" "user_setup.sh"
     
     if [ $has_on -eq 1 ]; then
         log_message "Executing additional features..." "DEBUG"
