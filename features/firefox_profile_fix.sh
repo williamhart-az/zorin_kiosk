@@ -50,6 +50,44 @@ FLATPAK_APP_BASE_DIR="$KIOSK_USER_HOME/.var/app"
 FLATPAK_FIREFOX_PROFILE_DIR="$FLATPAK_APP_BASE_DIR/org.mozilla.firefox"
 STANDARD_FIREFOX_PROFILE_PARENT_DIR="$KIOSK_USER_HOME/.mozilla"
 
+echo "[INFO] Ensuring Firefox directories have correct ownership and permissions..."
+
+# Ensure .var directory exists and has correct ownership
+if [ ! -d "$KIOSK_USER_HOME/.var" ]; then
+    mkdir -p "$KIOSK_USER_HOME/.var"
+    echo "[DEBUG] Created $KIOSK_USER_HOME/.var"
+fi
+chown "$KIOSK_USERNAME:$KIOSK_USERNAME" "$KIOSK_USER_HOME/.var"
+chmod 700 "$KIOSK_USER_HOME/.var"
+echo "[DEBUG] Set ownership and permissions for $KIOSK_USER_HOME/.var"
+
+# Ensure .var/app directory exists and has correct ownership
+if [ ! -d "$FLATPAK_APP_BASE_DIR" ]; then
+    mkdir -p "$FLATPAK_APP_BASE_DIR"
+    echo "[DEBUG] Created $FLATPAK_APP_BASE_DIR"
+fi
+chown "$KIOSK_USERNAME:$KIOSK_USERNAME" "$FLATPAK_APP_BASE_DIR"
+chmod 700 "$FLATPAK_APP_BASE_DIR"
+echo "[DEBUG] Set ownership and permissions for $FLATPAK_APP_BASE_DIR"
+
+# Ensure .var/app/org.mozilla.firefox directory exists and has correct ownership
+if [ ! -d "$FLATPAK_FIREFOX_PROFILE_DIR" ]; then
+    mkdir -p "$FLATPAK_FIREFOX_PROFILE_DIR"
+    echo "[DEBUG] Created $FLATPAK_FIREFOX_PROFILE_DIR"
+fi
+chown "$KIOSK_USERNAME:$KIOSK_USERNAME" "$FLATPAK_FIREFOX_PROFILE_DIR"
+chmod 700 "$FLATPAK_FIREFOX_PROFILE_DIR"
+echo "[DEBUG] Set ownership and permissions for $FLATPAK_FIREFOX_PROFILE_DIR"
+
+# Ensure .mozilla directory exists and has correct ownership
+if [ ! -d "$STANDARD_FIREFOX_PROFILE_PARENT_DIR" ]; then
+    mkdir -p "$STANDARD_FIREFOX_PROFILE_PARENT_DIR"
+    echo "[DEBUG] Created $STANDARD_FIREFOX_PROFILE_PARENT_DIR"
+fi
+chown "$KIOSK_USERNAME:$KIOSK_USERNAME" "$STANDARD_FIREFOX_PROFILE_PARENT_DIR"
+chmod 700 "$STANDARD_FIREFOX_PROFILE_PARENT_DIR"
+echo "[DEBUG] Set ownership and permissions for $STANDARD_FIREFOX_PROFILE_PARENT_DIR"
+
 echo "[INFO] Fixing Firefox profile.ini files..."
 
 # Function to update profiles.ini with modern format
@@ -93,17 +131,33 @@ EOL
 # Update profiles.ini in standard Firefox location
 if [ -d "$STANDARD_FIREFOX_PROFILE_PARENT_DIR" ]; then
   update_profiles_ini "$STANDARD_FIREFOX_PROFILE_PARENT_DIR"
+  # Ensure proper ownership after updating
+  chown -R "$KIOSK_USERNAME:$KIOSK_USERNAME" "$STANDARD_FIREFOX_PROFILE_PARENT_DIR"
+  chmod -R 700 "$STANDARD_FIREFOX_PROFILE_PARENT_DIR"
 fi
 
 # Update profiles.ini in Flatpak Firefox location
 if [ -d "$FLATPAK_FIREFOX_PROFILE_DIR" ]; then
+  # Ensure the .mozilla directory exists in the Flatpak location
+  if [ ! -d "$FLATPAK_FIREFOX_PROFILE_DIR/.mozilla" ]; then
+    mkdir -p "$FLATPAK_FIREFOX_PROFILE_DIR/.mozilla/firefox"
+    echo "[DEBUG] Created $FLATPAK_FIREFOX_PROFILE_DIR/.mozilla/firefox"
+    chown -R "$KIOSK_USERNAME:$KIOSK_USERNAME" "$FLATPAK_FIREFOX_PROFILE_DIR/.mozilla"
+    chmod -R 700 "$FLATPAK_FIREFOX_PROFILE_DIR/.mozilla"
+  fi
   update_profiles_ini "$FLATPAK_FIREFOX_PROFILE_DIR/.mozilla"
+  # Ensure proper ownership after updating
+  chown -R "$KIOSK_USERNAME:$KIOSK_USERNAME" "$FLATPAK_FIREFOX_PROFILE_DIR/.mozilla"
+  chmod -R 700 "$FLATPAK_FIREFOX_PROFILE_DIR/.mozilla"
 fi
 
 # Update profiles.ini in Snap Firefox location (if it exists)
 SNAP_FIREFOX_PROFILE_DIR="$KIOSK_USER_HOME/snap/firefox/common/.mozilla"
 if [ -d "$SNAP_FIREFOX_PROFILE_DIR" ]; then
   update_profiles_ini "$SNAP_FIREFOX_PROFILE_DIR"
+  # Ensure proper ownership after updating
+  chown -R "$KIOSK_USERNAME:$KIOSK_USERNAME" "$SNAP_FIREFOX_PROFILE_DIR"
+  chmod -R 700 "$SNAP_FIREFOX_PROFILE_DIR"
 fi
 
 echo "[INFO] Firefox profile.ini fix complete."
@@ -123,6 +177,39 @@ LOGFILE="$LOG_DIR/firefox_profile_fix.log"
 # Create log directory
 mkdir -p "$LOG_DIR"
 echo "$(date): Fixing Firefox profiles.ini..." >> "$LOGFILE"
+
+# Ensure Firefox directories exist with proper permissions
+echo "$(date): Ensuring Firefox directories exist with proper permissions..." >> "$LOGFILE"
+
+# Ensure .var directory exists
+if [ ! -d "$USER_HOME/.var" ]; then
+  mkdir -p "$USER_HOME/.var"
+  echo "$(date): Created $USER_HOME/.var" >> "$LOGFILE"
+fi
+
+# Ensure .var/app directory exists
+if [ ! -d "$USER_HOME/.var/app" ]; then
+  mkdir -p "$USER_HOME/.var/app"
+  echo "$(date): Created $USER_HOME/.var/app" >> "$LOGFILE"
+fi
+
+# Ensure .var/app/org.mozilla.firefox directory exists
+if [ ! -d "$USER_HOME/.var/app/org.mozilla.firefox" ]; then
+  mkdir -p "$USER_HOME/.var/app/org.mozilla.firefox"
+  echo "$(date): Created $USER_HOME/.var/app/org.mozilla.firefox" >> "$LOGFILE"
+fi
+
+# Ensure .var/app/org.mozilla.firefox/.mozilla/firefox directory exists
+if [ ! -d "$USER_HOME/.var/app/org.mozilla.firefox/.mozilla/firefox" ]; then
+  mkdir -p "$USER_HOME/.var/app/org.mozilla.firefox/.mozilla/firefox"
+  echo "$(date): Created $USER_HOME/.var/app/org.mozilla.firefox/.mozilla/firefox" >> "$LOGFILE"
+fi
+
+# Ensure .mozilla directory exists
+if [ ! -d "$USER_HOME/.mozilla" ]; then
+  mkdir -p "$USER_HOME/.mozilla/firefox"
+  echo "$(date): Created $USER_HOME/.mozilla/firefox" >> "$LOGFILE"
+fi
 
 # Function to update profiles.ini with modern format
 update_profiles_ini() {
