@@ -139,12 +139,14 @@ if systemctl is-active var-ownership-fix.service &>/dev/null; then
 fi
 
 # Now disable all services
-log_message "Disabling all kiosk-related services..." "DEBUG"# First, stop all services that might be using the kiosk user's home directory
-log_message "Stopping all kiosk-related services..." "INFO"
+log_message "Disabling all kiosk-related services..." "DEBUG"
 
 # Firefox ownership fix service
-if systemctl is-active firefox-ownership-fix.service &>/dev/null; then
-  
+if systemctl is-enabled firefox-ownership-fix.service &>/dev/null; then
+  log_message "Disabling firefox-ownership-fix.service" "DEBUG"
+  systemctl disable firefox-ownership-fix.service
+fi
+
 # Firefox periodic fix service and timer
 if systemctl is-enabled firefox-periodic-fix.timer &>/dev/null; then
   log_message "Disabling firefox-periodic-fix.timer" "DEBUG"
@@ -163,47 +165,6 @@ fi
 
 # Now remove service files
 log_message "Removing service files..." "DEBUG"
-
-# Firefox ownership fix service  systemctl stop firefox-ownership-fix.service
-fi
-
-# Firefox periodic fix service and timer
-if systemctl is-active firefox-periodic-fix.timer &>/dev/null; then
-  log_message "Stopping firefox-periodic-fix.timer" "DEBUG"
-
-systemctl stop firefox-periodic-fix.service
-fi
-
-# Var ownership fix service
-if systemctl is-active var-ownership-fix.service &>/dev/null; then
-
-
-# Now disable all services
-log_message "Disabling all kiosk-related services..." "DEBUG"# First, stop all services that might be using the kiosk user's home directory
-log_message "Stopping all kiosk-related services..." "INFO"
-
-# Firefox ownership fix service
-if systemctl is-active firefox-ownership-fix.service &>/dev/null; then
-
-log_message "Disabling firefox-periodic-fix.timer" "DEBUG"
-  systemctl disable firefox-periodic-fix.timer
-fi
-if systemctl is-enabled firefox-periodic-fix.service &>/dev/null; then
-  log_message "Disabling firefox-periodic-fix.service" "DEBUG"
-  systemctl disable firefox-periodic-fix.service
-fi
-
-# Var ownership fix service
-if systemctl is-enabled var-ownership-fix.service &>/dev/null; then
-  log_message "Disabling var-ownership-fix.service" "DEBUG"
-  systemctl disable var-ownership-fix.service
-fi
-
-# Now remove service files
-log_message "Removing service files..." "DEBUG"
-
-# Firefox ownership fix service  systemctl stop firefox-ownership-fix.service
-fi
 
 # Firefox periodic fix service and timer
 if systemctl is-active firefox-periodic-fix.timer &>/dev/null; then
@@ -240,53 +201,24 @@ fi
 # Now remove service files
 log_message "Removing service files..." "DEBUG"
 
-# Firefox ownership fix serviceif [ -f "/etc/systemd/system/firefox-ownership-fix.service" ]; then
-  log_message "Removing /etc/systemd/system/fi      
-      # Unmount any active tmpfs mounts for the user's home directory
-      if mount | grep -q "$KIOSK_USER_HOME"; then
-        log_message "Unmounting tmpfs for $KIOSK_USER_HOME" "DEBUG"
-        umount "$KIOSK_USER_HOME" || log_message "Failed to unmount $KIOSK_USER_HOME, will try to continue" "WARNING"
-      fi
-    fi
-    
-    # Kill any processes owned by the kiosk user
-    if pgrep -u "$KIOSK_USERNAME" > /dev/null; then
-      log_message "Terminating processes owned by $KIOSK_USERNAME" "DEBUG"
-      pkill -u "$KIOSK_USERNAME" || log_message "Failed to terminate all processes, will try SIGKILL" "WARNING"
-      sleep 1
-      pkill -9 -u "$KIOSK_USERNAME" 2>/dev/null || true  rm -f "/etc/systemd/system/firefox-ownership-fix.service"
+# Firefox ownership fix service
+if [ -f "/etc/systemd/system/firefox-ownership-fix.service" ]; then
+  log_message "Removing /etc/systemd/system/firefox-ownership-fix.service" "DEBUG"
+  rm -f "/etc/systemd/system/firefox-ownership-fix.service"
 fi
 
 # Firefox periodic fix service and timer
-
-
 if [ -f "/etc/systemd/system/firefox-periodic-fix.timer" ]; then
-  log_message "Removing /etc/systemd/s      log_message "Home directory still exists, trying alternative removal methods" "DEBUG"
-      
-      # Try to fix permissions first
-      log_message "Fixing permissions on $KIOSK_USER_HOME" "DEBUG"
-      find "$KIOSK_USER_HOME" -type d -exec chmod 755 {} \; 2>/dev/null || true
-      find "$KIOSK_USER_HOME" -type f -exec chmod 644 {} \; 2>/dev/null || true
-      
-      # Try removal again  rm -f "/etc/systemd/system/firefox-periodic-fix.timer"
-      rm -rf "$KIOSK_USER_HOME" 2>/dev/null || {
-        log_message "Failed to remove home directory, it may be in use" "WARNING"
-        log_message "You may need to reboot and run this script again to fully remove the user" "WARNING"
-      }
+  log_message "Removing /etc/systemd/system/firefox-periodic-fix.timer" "DEBUG"
+  rm -f "/etc/systemd/system/firefox-periodic-fix.timer"
+fi
 
-
-    if [ ! -d "$KIOSK_USER_HOME" ]; then
-      log_message "Kiosk user removed successfully." "INFO"
-    else
-      log_message "Kiosk user account removed but home directory remains." "WARNING"
-    fi" ]; then
+if [ -f "/etc/systemd/system/firefox-periodic-fix.service" ]; then
   log_message "Removing /etc/systemd/system/firefox-periodic-fix.service" "DEBUG"
   rm -f "/etc/systemd/system/firefox-periodic-fix.service"
 fi
 
 # Var ownership fix service
-
-
 if [ -f "/etc/systemd/system/var-ownership-fix.service" ]; then
   log_message "Removing /etc/systemd/system/var-ownership-fix.service" "DEBUG"
   rm -f "/etc/systemd/system/var-ownership-fix.service"
@@ -304,28 +236,15 @@ if [ -f "/etc/sudoers.d/kiosk-firefox" ]; then
 fi
 if [ -f "/etc/sudoers.d/kiosk-firefox-fix" ]; then
   log_message "Removing /etc/sudoers.d/kiosk-firefox-fix" "DEBUG"
-  rm -f "/etc/sudoers.d/kiosk-firefox-fix"      
-      # Unmount any active tmpfs mounts for the user's home directory
-      if mount | grep -q "$KIOSK_USER_HOME"; then
-        log_message "Unmounting tmpfs for $KIOSK_USER_HOME" "DEBUG"
-        umount "$KIOSK_USER_HOME" || log_message "Failed to unmount $KIOSK_USER_HOME, will try to continue" "WARNING"
-      fi
-    fi
-    
-    # Kill any processes owned by the kiosk user
-    if pgrep -u "$KIOSK_USERNAME" > /dev/null; then
-      log_message "Terminating processes owned by $KIOSK_USERNAME" "DEBUG"
-      pkill -u "$KIOSK_USERNAME" || log_message "Failed to terminate all processes, will try SIGKILL" "WARNING"
-      sleep 1
-      pkill -9 -u "$KIOSK_USERNAME" 2>/dev/null || truefi
+  rm -f "/etc/sudoers.d/kiosk-firefox-fix"
+fi
 
 # 3. Remove scripts from /opt/kiosk
 log_message "Removing kiosk scripts from $OPT_KIOSK_DIR..." "INFO"
 if [ -d "$OPT_KIOSK_DIR" ]; then
   log_message "Removing $OPT_KIOSK_DIR directory" "DEBUG"
   rm -rf "$OPT_KIOSK_DIR"
-fi      log_message "Home directory still exists, trying alternative removal methods" "DEBUG"
-      
+fi
 
 # Check if any kiosk-related files or directories still exist
 remaining_issues=false
@@ -364,22 +283,10 @@ else
   log_message "You may want to reboot your system to ensure all changes take effect" "INFO"
 fi
 
-      log_message "Fixing permissions on $KIOSK_USER_HOME" "DEBUG"
-      find "$KIOSK_USER_HOME" -type d -exec chmod 755 {} \; 2>/dev/null || true
-      find "$KIOSK_USER_HOME" -type f -exec chmod 644 {} \; 2>/dev/null || true
-      
-      # Try removal again
-      rm -rf "$KIOSK_USER_HOME" 2>/dev/null || {
-        log_message "Failed to remove home directory, it may be in use" "WARNING"
-        log_message "You may need to reboot and run this script again to fully remove the user" "WARNING"
-      }art entries
+# 4. Remove autostart entries
 log_message "Removing kiosk user's autostart entries..." "INFO"
 AUTOSTART_DIR="$KIOSK_USER_HOME/.config/autostart"
-    if [ ! -d "$KIOSK_USER_HOME" ]; then
-      log_message "Kiosk user removed successfully." "INFO"
-    else
-      log_message "Kiosk user account removed but home directory remains." "WARNING"
-    fihen
+if [ -f "$AUTOSTART_DIR/firefox-profile-fix.desktop" ]; then
   log_message "Removing $AUTOSTART_DIR/firefox-profile-fix.desktop" "DEBUG"
   rm -f "$AUTOSTART_DIR/firefox-profile-fix.desktop"
 fi
