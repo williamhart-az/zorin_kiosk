@@ -247,9 +247,20 @@ run_single_feature() {
         if [ ${states[$selected]} -eq 1 ]; then
             script_path="features/${script_names[$selected]}"
             log_message "Running uninstall: ${menu_items[$selected]}" "INFO"
-            run_with_logging "$script_path enable" "${menu_items[$selected]}" "${script_names[$selected]}"
+            log_message "Handing control to uninstall script..." "INFO"
             echo "--------------------------------"
-            echo "Uninstall complete!"
+            echo "Handing control to uninstall script. Setup will exit."
+            
+            # Execute uninstall directly (not as a subprocess)
+            if $ENABLE_LOGGING; then
+                exec "$script_path" enable
+            else
+                exec "$script_path" enable --nolog
+            fi
+            # Note: exec replaces the current process, so the code below won't run
+            # unless the exec fails
+            echo "Error: Failed to execute uninstall script."
+            exit 1
         else
             echo "Feature is OFF - nothing to run."
             log_message "Feature ${menu_items[$selected]} is OFF - nothing to run" "DEBUG"
@@ -316,7 +327,24 @@ run_all_on() {
         run_with_logging "features/user_setup.sh enable" "User Setup" "user_setup.sh"
     fi
     
-    if [ $has_on -eq 1 ] || [ $uninstall_on -eq 1 ]; then
+    # Special handling if uninstall is ON
+    if [ $uninstall_on -eq 1 ]; then
+        log_message "Uninstall is ON - handing control to uninstall script" "INFO"
+        echo "Uninstall is ON - handing control to uninstall script"
+        echo "--------------------------------"
+        echo "Handing control to uninstall script. Setup will exit."
+        
+        # Execute uninstall directly (not as a subprocess)
+        if $ENABLE_LOGGING; then
+            exec "features/uninstall.sh" enable
+        else
+            exec "features/uninstall.sh" enable --nolog
+        fi
+        # Note: exec replaces the current process, so the code below won't run
+        # unless the exec fails
+        echo "Error: Failed to execute uninstall script."
+        exit 1
+    elif [ $has_on -eq 1 ]; then
         log_message "Executing additional features..." "DEBUG"
         echo "Executing additional features..."
         echo "--------------------------------"

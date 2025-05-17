@@ -17,6 +17,10 @@ for arg in "$@"; do
       ENABLE_LOGGING=false
       shift
       ;;
+    enable)
+      # This parameter is passed by setup.sh, we can ignore it
+      shift
+      ;;
   esac
 done
 
@@ -262,6 +266,16 @@ log_message "Uninstallation complete!" "INFO"
 log_message "You may need to reboot your system for all changes to take effect." "INFO"
 log_message "Recommended: sudo reboot" "INFO"
 
-echo "" >&2
-echo "Press Enter to return to menu..." >&2
-read
+# Check if we were called from setup.sh (with 'enable' parameter)
+if [[ " $* " == *" enable "* ]]; then
+  # We were called from setup.sh, so we should exit completely
+  echo "" >&2
+  echo "Press Enter to exit..." >&2
+  read
+  exit 0
+else
+  # We were called directly, so we should return to the menu
+  echo "" >&2
+  echo "Press Enter to return to menu..." >&2
+  read
+fi
