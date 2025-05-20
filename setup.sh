@@ -5,7 +5,8 @@ tput init
 clear
 
 # Setup logging
-LOG_FILE="setup.log"
+LOG_DIR="/var/log/kiosk"
+LOG_FILE="$LOG_DIR/setup.sh.log" # Changed log file path
 ENABLE_LOGGING=true
 
 # Process command line arguments
@@ -18,9 +19,15 @@ for arg in "$@"; do
   esac
 done
 
-# Initialize log file if logging is enabled
+# Create log directory and initialize log file if logging is enabled
 if $ENABLE_LOGGING; then
-  echo "=== Kiosk Setup Log $(date) ===" > "$LOG_FILE"
+  mkdir -p "$LOG_DIR" # Create log directory if it doesn't exist
+  chmod 755 "$LOG_DIR" # Ensure root can write, others can read/execute (for subdirs)
+  # Ensure the log file itself is writable by root
+  touch "$LOG_FILE"
+  chmod 644 "$LOG_FILE" # Root r/w, others read
+
+  echo "=== Kiosk Setup Log $(date) ===" > "$LOG_FILE" # Ensure this writes to the new LOG_FILE
   echo "Command: $0 $@" >> "$LOG_FILE"
   echo "----------------------------------------" >> "$LOG_FILE"
 fi
@@ -28,25 +35,24 @@ fi
 # Function to log messages
 log_message() {
   local message="$1"
-  local level="${2:-INFO}"
+  local level="${2:-INFO}" # Default level is INFO
   local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
   
   if $ENABLE_LOGGING; then
+    # Append to the global LOG_FILE
     echo "[$level] $timestamp - $message" >> "$LOG_FILE"
   fi
   
   # Only print non-DEBUG messages to the console
   if [ "$level" != "DEBUG" ]; then
-    echo "[$level] $message"
+    echo "[$level] $message" # This echo goes to console
   fi
 }
 
-# Function to run a command with logging
-run_with_logging() {
-  local cmd="$1"
-}
+# (Removed first incomplete run_with_logging function)
 
 echo "=== ZorinOS Kiosk Setup ==="
+log_message "ZorinOS Kiosk Setup script started." "INFO"
 echo "This script will configure your system for kiosk mode with desktop access."
 echo "WARNING: This is meant for dedicated kiosk systems only!"
 echo ""

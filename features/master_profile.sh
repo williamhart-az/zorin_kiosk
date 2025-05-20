@@ -1,45 +1,70 @@
 #!/bin/bash
 
+LOG_DIR="/var/log/kiosk"
+LOG_FILE="$LOG_DIR/master_profile.sh.log"
+
+# Ensure log directory exists
+mkdir -p "$LOG_DIR"
+chown kiosk:kiosk "$LOG_DIR" # Assuming 'kiosk' user/group, adjust if needed
+chmod 755 "$LOG_DIR"
+
+log_message() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG_FILE"
+}
+
 enable_feature() {
-    echo "Cloning Firefox profile for kiosk user..."
+    log_message "Starting enable_feature: Cloning Firefox profile for kiosk user..."
 
     # Source profile location (admin user)
     SOURCE_PROFILE_DIR="$HOME/.mozilla/firefox"
     SOURCE_PROFILES_INI="$SOURCE_PROFILE_DIR/profiles.ini"
+    log_message "Source profile directory: $SOURCE_PROFILE_DIR"
+    log_message "Source profiles.ini: $SOURCE_PROFILES_INI"
 
     # Destination profile location (kiosk user)
-    KIOSK_HOME="/home/kiosk"
+    KIOSK_HOME="/home/kiosk" # Define KIOSK_HOME if not already defined globally
     DEST_PROFILE_DIR="$KIOSK_HOME/.mozilla/firefox"
+    log_message "Destination profile directory for kiosk user: $DEST_PROFILE_DIR"
 
     # Create directories if they don't exist
+    log_message "Creating destination directory if it doesn't exist: $DEST_PROFILE_DIR"
     mkdir -p "$DEST_PROFILE_DIR"
 
     # 1. First, identify the default profile from profiles.ini
     if [ -f "$SOURCE_PROFILES_INI" ]; then
+        log_message "Source profiles.ini found at $SOURCE_PROFILES_INI."
         # Extract the default profile path
         DEFAULT_PROFILE=$(grep -A 10 "Default=1" "$SOURCE_PROFILES_INI" | grep "Path=" | head -1 | cut -d= -f2)
+        log_message "Attempted to find Default=1 profile. Result: $DEFAULT_PROFILE"
 
         if [ -z "$DEFAULT_PROFILE" ]; then
+            log_message "No Default=1 profile found. Trying to get the first profile listed."
             # If no default profile found, try to get the first profile
             DEFAULT_PROFILE=$(grep "Path=" "$SOURCE_PROFILES_INI" | head -1 | cut -d= -f2)
+            log_message "First profile found: $DEFAULT_PROFILE"
         fi
 
         if [ -n "$DEFAULT_PROFILE" ]; then
             SOURCE_PROFILE_PATH="$SOURCE_PROFILE_DIR/$DEFAULT_PROFILE"
-            echo "Found source profile: $SOURCE_PROFILE_PATH"
+            log_message "Identified source profile path: $SOURCE_PROFILE_PATH"
 
             # 2. Create a new profile for kiosk
             KIOSK_PROFILE_NAME="kiosk.default"
             KIOSK_PROFILE_PATH="$DEST_PROFILE_DIR/$KIOSK_PROFILE_NAME"
+            log_message "Kiosk profile name: $KIOSK_PROFILE_NAME"
+            log_message "Kiosk profile path: $KIOSK_PROFILE_PATH"
 
             # Create the profile directory
+            log_message "Creating kiosk profile directory: $KIOSK_PROFILE_PATH"
             mkdir -p "$KIOSK_PROFILE_PATH"
 
             # 3. Copy profile contents
-            echo "Copying profile contents..."
+            log_message "Copying profile contents from $SOURCE_PROFILE_PATH to $KIOSK_PROFILE_PATH..."
             cp -r "$SOURCE_PROFILE_PATH"/* "$KIOSK_PROFILE_PATH/"
+            log_message "Profile contents copied."
 
             # 4. Create/update profiles.ini for kiosk user with modern format
+            log_message "Creating/updating profiles.ini for kiosk user at $DEST_PROFILE_DIR/profiles.ini"
             cat > "$DEST_PROFILE_DIR/profiles.ini" << EOF
 [Profile0]
 Name=default
@@ -54,11 +79,14 @@ Version=2
 [Install]
 DefaultProfile=$KIOSK_PROFILE_NAME
 EOF
+            log_message "Kiosk profiles.ini created."
 
             # Also create profiles.ini in Flatpak location if needed
-            if [ -d "$KIOSK_HOME/.var/app/org.mozilla.firefox" ]; then
-                mkdir -p "$KIOSK_HOME/.var/app/org.mozilla.firefox/.mozilla/firefox"
-                cat > "$KIOSK_HOME/.var/app/org.mozilla.firefox/.mozilla/firefox/profiles.ini" << EOF
+            FLATPAK_FIREFOX_DIR="$KIOSK_HOME/.var/app/org.mozilla.firefox"
+            if [ -d "$FLATPAK_FIREFOX_DIR" ]; then
+                log_message "Flatpak Firefox directory found at $FLATPAK_FIREFOX_DIR. Creating profiles.ini there as well."
+                mkdir -p "$FLATPAK_FIREFOX_DIR/.mozilla/firefox"
+                cat > "$FLATPAK_FIREFOX_DIR/.mozilla/firefox/profiles.ini" << EOF
 [Profile0]
 Name=default
 IsRelative=1
@@ -72,82 +100,171 @@ Version=2
 [Install]
 DefaultProfile=$KIOSK_PROFILE_NAME
 EOF
+                log_message "Flatpak profiles.ini created."
+            else
+                log_message "Flatpak Firefox directory not found at $FLATPAK_FIREFOX_DIR."
             fi
 
             # 5. Ensure user.js is in the profile directory
-            if [ -f "/opt/kiosk/user.js" ]; then
-                echo "Copying user.js to profile..."
-                cp "/opt/kiosk/user.js" "$KIOSK_PROFILE_PATH/user.js"
+            USER_JS_PATH="/opt/kiosk/user.js"
+            if [ -f "$USER_JS_PATH" ]; then
+                log_message "Copying user.js from $USER_JS_PATH to $KIOSK_PROFILE_PATH/user.js..."
+                cp "$USER_JS_PATH" "$KIOSK_PROFILE_PATH/user.js"
+                log_message "user.js copied."
             else
-                echo "Warning: user.js not found in /opt/kiosk/"
+                log_message "Warning: user.js not found in $USER_JS_PATH."
             fi
 
             # 6. Set proper ownership
-            chown -R kiosk:kiosk "$KIOSK_HOME/.mozilla"
+            log_message "Setting ownership of $KIOSK_HOME/.mozilla to kiosk:kiosk..."
+            chown -R kiosk:kiosk "$KIOSK_HOME/.mozilla" # Ensure KIOSK_USER variable is set or use static user
+            log_message "Ownership set."
 
-            echo "Firefox profile successfully cloned for kiosk user"
+            log_message "Firefox profile successfully cloned for kiosk user."
         else
-            echo "Error: Could not find a Firefox profile to clone"
+            log_message "Error: Could not find a Firefox profile to clone. DEFAULT_PROFILE was empty."
             exit 1
         fi
     else
-        echo "Error: Source profiles.ini not found at $SOURCE_PROFILES_INI"
+        log_message "Error: Source profiles.ini not found at $SOURCE_PROFILES_INI."
         exit 1
     fi
 }
 
 disable_feature() {
-    echo "Removing Firefox profile for kiosk user..."
-    rm -rf "/home/kiosk/.mozilla/firefox"
+    log_message "Starting disable_feature: Removing Firefox profile for kiosk user..."
+    KIOSK_HOME="/home/kiosk" # Define KIOSK_HOME if not already defined globally
+    DEST_PROFILE_DIR="$KIOSK_HOME/.mozilla/firefox"
+    FLATPAK_FIREFOX_PROFILE_DIR="$KIOSK_HOME/.var/app/org.mozilla.firefox/.mozilla/firefox"
+
+    if [ -d "$DEST_PROFILE_DIR" ]; then
+        log_message "Removing Firefox profile directory: $DEST_PROFILE_DIR"
+        rm -rf "$DEST_PROFILE_DIR"
+        log_message "Directory $DEST_PROFILE_DIR removed."
+    else
+        log_message "Firefox profile directory $DEST_PROFILE_DIR not found. Nothing to remove."
+    fi
+
+    if [ -d "$FLATPAK_FIREFOX_PROFILE_DIR" ]; then
+        log_message "Removing Flatpak Firefox profile directory: $FLATPAK_FIREFOX_PROFILE_DIR"
+        rm -rf "$FLATPAK_FIREFOX_PROFILE_DIR"
+        log_message "Directory $FLATPAK_FIREFOX_PROFILE_DIR removed."
+    else
+        log_message "Flatpak Firefox profile directory $FLATPAK_FIREFOX_PROFILE_DIR not found. Nothing to remove."
+    fi
+    log_message "Firefox profile removal complete for kiosk user."
 }
 
 case "$1" in
     enable)
+        log_message "Argument 'enable' received. Calling enable_feature."
         enable_feature
+        log_message "enable_feature completed."
         ;;
     disable)
+        log_message "Argument 'disable' received. Calling disable_feature."
         disable_feature
+        log_message "disable_feature completed."
         ;;
     *)
+        log_message "Invalid argument received: $1. Usage: $0 {enable|disable}"
         echo "Usage: $0 {enable|disable}"
         exit 1
         ;;
 esac
 
+log_message "Script finished."
 exit 0
 
 # Function to save admin changes to the template directory
 save_admin_changes() {
   # Log initialization
-  LOGFILE="/tmp/admin_save.log"
-  echo "$(date): Saving admin changes to template directory..." >> "$LOGFILE"
+  ADMIN_SAVE_LOG_FILE="$LOG_DIR/admin_save.log" # Use the global LOG_DIR
+  local admin_log_message() {
+      echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$ADMIN_SAVE_LOG_FILE"
+  }
+  admin_log_message "Saving admin changes to template directory..."
+
+  # Ensure ADMIN_USERNAME and TEMPLATE_DIR are set (these should be sourced from .env or passed)
+  if [ -z "$ADMIN_USERNAME" ] || [ -z "$TEMPLATE_DIR" ]; then
+    admin_log_message "Error: ADMIN_USERNAME or TEMPLATE_DIR not set in save_admin_changes."
+    return 1
+  fi
+  admin_log_message "ADMIN_USERNAME: $ADMIN_USERNAME, TEMPLATE_DIR: $TEMPLATE_DIR"
 
   # Copy Firefox profile if it exists
-  if [ -d "/home/$ADMIN_USERNAME/.mozilla" ]; then
-    echo "$(date): Copying Firefox profile to template..." >> "$LOGFILE"
-    rm -rf "$TEMPLATE_DIR/.mozilla"  # Remove existing profile
-    cp -r "/home/$ADMIN_USERNAME/.mozilla" "$TEMPLATE_DIR/"
+  # Determine Firefox profile directory for $ADMIN_USERNAME
+  FF_PROFILE_DIR_SNAP="/home/$ADMIN_USERNAME/snap/firefox/common/.mozilla"
+  FF_PROFILE_DIR_FLATPAK="/home/$ADMIN_USERNAME/.var/app/org.mozilla.firefox/.mozilla"
+  FF_PROFILE_DIR_TRADITIONAL="/home/$ADMIN_USERNAME/.mozilla" # Original path
+  FF_PROFILE_SOURCE_DIR=""
+
+  if [ -d "$FF_PROFILE_DIR_SNAP" ]; then
+    FF_PROFILE_SOURCE_DIR="$FF_PROFILE_DIR_SNAP"
+    admin_log_message "Found Firefox Snap profile at $FF_PROFILE_SOURCE_DIR for user $ADMIN_USERNAME"
+  elif [ -d "$FF_PROFILE_DIR_FLATPAK" ]; then
+    FF_PROFILE_SOURCE_DIR="$FF_PROFILE_DIR_FLATPAK"
+    admin_log_message "Found Firefox Flatpak profile at $FF_PROFILE_SOURCE_DIR for user $ADMIN_USERNAME"
+  elif [ -d "$FF_PROFILE_DIR_TRADITIONAL" ]; then
+    FF_PROFILE_SOURCE_DIR="$FF_PROFILE_DIR_TRADITIONAL"
+    admin_log_message "Found Firefox traditional profile at $FF_PROFILE_SOURCE_DIR for user $ADMIN_USERNAME"
+  fi
+
+  if [ -n "$FF_PROFILE_SOURCE_DIR" ]; then
+    admin_log_message "Copying Firefox profile from $FF_PROFILE_SOURCE_DIR to $TEMPLATE_DIR/.mozilla..."
+    rm -rf "$TEMPLATE_DIR/.mozilla"  # Remove existing profile first
+    cp -r "$FF_PROFILE_SOURCE_DIR" "$TEMPLATE_DIR/.mozilla" # Copies the found profile dir and names the copy '.mozilla'
     chmod -R 755 "$TEMPLATE_DIR/.mozilla"
+    admin_log_message "Firefox profile copied to template."
+
+    # Store the Firefox profile type for later use
+    FF_PROFILE_TYPE="unknown"
+    if [[ "$FF_PROFILE_SOURCE_DIR" == *"/snap/firefox/"* ]]; then
+      FF_PROFILE_TYPE="snap"
+    elif [[ "$FF_PROFILE_SOURCE_DIR" == *".var/app/org.mozilla.firefox"* ]]; then
+      FF_PROFILE_TYPE="flatpak"
+    elif [[ "$FF_PROFILE_SOURCE_DIR" == *".mozilla"* ]]; then # Check this last as it's more generic
+      FF_PROFILE_TYPE="traditional"
+    fi
+    admin_log_message "Determined Firefox profile type as: $FF_PROFILE_TYPE"
+    
+    # Create a file to indicate the Firefox profile type
+    echo "$FF_PROFILE_TYPE" > "$TEMPLATE_DIR/.firefox_profile_type"
+    chmod 644 "$TEMPLATE_DIR/.firefox_profile_type"
+    admin_log_message "Firefox profile type indicator file created at $TEMPLATE_DIR/.firefox_profile_type"
+  else
+    admin_log_message "Firefox profile directory not found for user $ADMIN_USERNAME. Searched Snap, Flatpak, and traditional paths."
   fi
 
   # Copy desktop shortcuts
-  echo "$(date): Copying desktop shortcuts to template..." >> "$LOGFILE"
-  cp -r "/home/$ADMIN_USERNAME/Desktop/"* "$TEMPLATE_DIR/Desktop/" 2>/dev/null || true
+  admin_log_message "Copying desktop shortcuts from /home/$ADMIN_USERNAME/Desktop/ to $TEMPLATE_DIR/Desktop/..."
+  cp -r "/home/$ADMIN_USERNAME/Desktop/"* "$TEMPLATE_DIR/Desktop/" 2>/dev/null || admin_log_message "No desktop shortcuts to copy or error during copy."
 
   # Copy documents
-  echo "$(date): Copying documents to template..." >> "$LOGFILE"
-  cp -r "/home/$ADMIN_USERNAME/Documents/"* "$TEMPLATE_DIR/Documents/" 2>/dev/null || true
+  admin_log_message "Copying documents from /home/$ADMIN_USERNAME/Documents/ to $TEMPLATE_DIR/Documents/..."
+  cp -r "/home/$ADMIN_USERNAME/Documents/"* "$TEMPLATE_DIR/Documents/" 2>/dev/null || admin_log_message "No documents to copy or error during copy."
 
   # Set correct ownership for all template files
+  admin_log_message "Setting ownership of $TEMPLATE_DIR to root:root and permissions to 755 recursively..."
   chown -R root:root "$TEMPLATE_DIR"
   chmod -R 755 "$TEMPLATE_DIR"
 
-  echo "$(date): Admin changes saved successfully." >> "$LOGFILE"
+  admin_log_message "Admin changes saved successfully."
 }
 
 # Function to create the save admin changes script
 create_save_admin_script() {
+  log_message "Starting create_save_admin_script..."
+  # Ensure OPT_KIOSK_DIR is set
+  if [ -z "$OPT_KIOSK_DIR" ]; then
+    log_message "Error: OPT_KIOSK_DIR not set in create_save_admin_script."
+    return 1
+  fi
   SAVE_ADMIN_SCRIPT="$OPT_KIOSK_DIR/save_admin_changes.sh"
+  log_message "Save admin script will be created at: $SAVE_ADMIN_SCRIPT"
+
+  # Define the log file path for the generated script
+  GENERATED_SCRIPT_LOG_FILE="$LOG_DIR/admin_save_generated_script.log" # Use the global LOG_DIR
 
   cat > "$SAVE_ADMIN_SCRIPT" << EOF
 #!/bin/bash
@@ -155,124 +272,207 @@ create_save_admin_script() {
 # Script to save admin user changes to the kiosk template directory
 
 # Log initialization
-LOGFILE="/tmp/admin_save.log"
-echo "\$(date): Saving admin changes to template directory..." >> "\$LOGFILE"
+# Note: \$LOG_DIR will be expanded when this script (save_admin_changes.sh) runs,
+# if LOG_DIR is exported or defined in its environment.
+# For robustness, we hardcode it here or ensure it's passed.
+# Using the path directly from the parent script's LOG_DIR variable.
+LOGFILE="$GENERATED_SCRIPT_LOG_FILE"
+mkdir -p "$(dirname "\$LOGFILE")" # Ensure directory exists when script runs
+
+log_generated_script_message() {
+    echo "\$(date '+%Y-%m-%d %H:%M:%S') - \$1" >> "\$LOGFILE"
+}
+
+log_generated_script_message "Executing save_admin_changes.sh: Saving admin changes to template directory..."
+
+# ADMIN_USERNAME and TEMPLATE_DIR are expanded here by the master_profile.sh script
+# So, their values will be hardcoded into the generated save_admin_changes.sh script.
+ADMIN_USERNAME_EXPANDED="$ADMIN_USERNAME"
+TEMPLATE_DIR_EXPANDED="$TEMPLATE_DIR"
+
+log_generated_script_message "ADMIN_USERNAME for this run: \$ADMIN_USERNAME_EXPANDED"
+log_generated_script_message "TEMPLATE_DIR for this run: \$TEMPLATE_DIR_EXPANDED"
 
 # Create template directories if they don't exist
-mkdir -p "$TEMPLATE_DIR/Desktop"
-mkdir -p "$TEMPLATE_DIR/Documents"
-mkdir -p "$TEMPLATE_DIR/.config/autostart"
-mkdir -p "$TEMPLATE_DIR/.local/share/applications"
+log_generated_script_message "Creating template subdirectories if they don't exist..."
+mkdir -p "\$TEMPLATE_DIR_EXPANDED/Desktop"
+mkdir -p "\$TEMPLATE_DIR_EXPANDED/Documents"
+mkdir -p "\$TEMPLATE_DIR_EXPANDED/.config/autostart"
+mkdir -p "\$TEMPLATE_DIR_EXPANDED/.local/share/applications"
 
-# Determine Firefox profile directory for $ADMIN_USERNAME
-# Note: $ADMIN_USERNAME and $TEMPLATE_DIR below are expanded when master_profile.sh generates save_admin_changes.sh.
-# The \$ prefixed variables are for the save_admin_changes.sh script itself when it runs.
-\$FF_PROFILE_DIR_SNAP="/home/$ADMIN_USERNAME/snap/firefox/common/.mozilla"
-\$FF_PROFILE_DIR_FLATPAK="/home/$ADMIN_USERNAME/.var/app/org.mozilla.firefox/.mozilla"
-\$FF_PROFILE_DIR_TRADITIONAL="/home/$ADMIN_USERNAME/.mozilla" # Original path
-\$FF_PROFILE_SOURCE_DIR=""
+# Determine Firefox profile directory for \$ADMIN_USERNAME_EXPANDED
+FF_PROFILE_DIR_SNAP="/home/\$ADMIN_USERNAME_EXPANDED/snap/firefox/common/.mozilla"
+FF_PROFILE_DIR_FLATPAK="/home/\$ADMIN_USERNAME_EXPANDED/.var/app/org.mozilla.firefox/.mozilla"
+FF_PROFILE_DIR_TRADITIONAL="/home/\$ADMIN_USERNAME_EXPANDED/.mozilla" # Original path
+FF_PROFILE_SOURCE_DIR=""
 
+log_generated_script_message "Searching for Firefox profile for user \$ADMIN_USERNAME_EXPANDED..."
 if [ -d "\$FF_PROFILE_DIR_SNAP" ]; then
-  \$FF_PROFILE_SOURCE_DIR="\$FF_PROFILE_DIR_SNAP"
-  echo "\$(date): Found Firefox Snap profile at \$FF_PROFILE_SOURCE_DIR for user $ADMIN_USERNAME" >> "\$LOGFILE"
+  FF_PROFILE_SOURCE_DIR="\$FF_PROFILE_DIR_SNAP"
+  log_generated_script_message "Found Firefox Snap profile at \$FF_PROFILE_SOURCE_DIR"
 elif [ -d "\$FF_PROFILE_DIR_FLATPAK" ]; then
-  \$FF_PROFILE_SOURCE_DIR="\$FF_PROFILE_DIR_FLATPAK"
-  echo "\$(date): Found Firefox Flatpak profile at \$FF_PROFILE_SOURCE_DIR for user $ADMIN_USERNAME" >> "\$LOGFILE"
+  FF_PROFILE_SOURCE_DIR="\$FF_PROFILE_DIR_FLATPAK"
+  log_generated_script_message "Found Firefox Flatpak profile at \$FF_PROFILE_SOURCE_DIR"
 elif [ -d "\$FF_PROFILE_DIR_TRADITIONAL" ]; then
-  \$FF_PROFILE_SOURCE_DIR="\$FF_PROFILE_DIR_TRADITIONAL"
-  echo "\$(date): Found Firefox traditional profile at \$FF_PROFILE_SOURCE_DIR for user $ADMIN_USERNAME" >> "\$LOGFILE"
+  FF_PROFILE_SOURCE_DIR="\$FF_PROFILE_DIR_TRADITIONAL"
+  log_generated_script_message "Found Firefox traditional profile at \$FF_PROFILE_SOURCE_DIR"
 fi
 
 # Copy Firefox profile if a source directory was found
 if [ -n "\$FF_PROFILE_SOURCE_DIR" ]; then
-  echo "\$(date): Copying Firefox profile from \$FF_PROFILE_SOURCE_DIR to $TEMPLATE_DIR/.mozilla..." >> "\$LOGFILE"
-  rm -rf "$TEMPLATE_DIR/.mozilla"  # Remove existing profile first
-  cp -r "\$FF_PROFILE_SOURCE_DIR" "$TEMPLATE_DIR/.mozilla" # Copies the found profile dir and names the copy '.mozilla'
-  chmod -R 755 "$TEMPLATE_DIR/.mozilla"
+  log_generated_script_message "Copying Firefox profile from \$FF_PROFILE_SOURCE_DIR to \$TEMPLATE_DIR_EXPANDED/.mozilla..."
+  rm -rf "\$TEMPLATE_DIR_EXPANDED/.mozilla"  # Remove existing profile first
+  cp -r "\$FF_PROFILE_SOURCE_DIR" "\$TEMPLATE_DIR_EXPANDED/.mozilla" # Copies the found profile dir and names the copy '.mozilla'
+  chmod -R 755 "\$TEMPLATE_DIR_EXPANDED/.mozilla"
+  log_generated_script_message "Firefox profile copied."
   
   # Store the Firefox profile type for later use
-  FF_PROFILE_TYPE="unknown"
+  CURRENT_FF_PROFILE_TYPE="unknown"
   if [[ "\$FF_PROFILE_SOURCE_DIR" == *"/snap/firefox/"* ]]; then
-    FF_PROFILE_TYPE="snap"
+    CURRENT_FF_PROFILE_TYPE="snap"
   elif [[ "\$FF_PROFILE_SOURCE_DIR" == *".var/app/org.mozilla.firefox"* ]]; then
-    FF_PROFILE_TYPE="flatpak"
-  elif [[ "\$FF_PROFILE_SOURCE_DIR" == *".mozilla"* ]]; then
-    FF_PROFILE_TYPE="traditional"
+    CURRENT_FF_PROFILE_TYPE="flatpak"
+  elif [[ "\$FF_PROFILE_SOURCE_DIR" == *".mozilla"* ]]; then # Check this last
+    CURRENT_FF_PROFILE_TYPE="traditional"
   fi
+  log_generated_script_message "Determined Firefox profile type as: \$CURRENT_FF_PROFILE_TYPE"
   
   # Create a file to indicate the Firefox profile type
-  echo "\$FF_PROFILE_TYPE" > "$TEMPLATE_DIR/.firefox_profile_type"
-  chmod 644 "$TEMPLATE_DIR/.firefox_profile_type"
+  echo "\$CURRENT_FF_PROFILE_TYPE" > "\$TEMPLATE_DIR_EXPANDED/.firefox_profile_type"
+  chmod 644 "\$TEMPLATE_DIR_EXPANDED/.firefox_profile_type"
+  log_generated_script_message "Firefox profile type indicator file created at \$TEMPLATE_DIR_EXPANDED/.firefox_profile_type"
 else
-  echo "\$(date): Firefox profile directory not found for user $ADMIN_USERNAME. Searched Snap, Flatpak, and traditional paths." >> "\$LOGFILE"
+  log_generated_script_message "Firefox profile directory not found for user \$ADMIN_USERNAME_EXPANDED. Searched Snap, Flatpak, and traditional paths."
 fi
 
 # Copy desktop shortcuts
-echo "\$(date): Copying desktop shortcuts to template..." >> "\$LOGFILE"
-cp -r "/home/$ADMIN_USERNAME/Desktop/"* "$TEMPLATE_DIR/Desktop/" 2>/dev/null || true
+log_generated_script_message "Copying desktop shortcuts from /home/\$ADMIN_USERNAME_EXPANDED/Desktop/ to \$TEMPLATE_DIR_EXPANDED/Desktop/..."
+cp -r "/home/\$ADMIN_USERNAME_EXPANDED/Desktop/"* "\$TEMPLATE_DIR_EXPANDED/Desktop/" 2>/dev/null || log_generated_script_message "No desktop shortcuts to copy or error during copy."
 
 # Copy documents
-echo "\$(date): Copying documents to template..." >> "\$LOGFILE"
-cp -r "/home/$ADMIN_USERNAME/Documents/"* "$TEMPLATE_DIR/Documents/" 2>/dev/null || true
+log_generated_script_message "Copying documents from /home/\$ADMIN_USERNAME_EXPANDED/Documents/ to \$TEMPLATE_DIR_EXPANDED/Documents/..."
+cp -r "/home/\$ADMIN_USERNAME_EXPANDED/Documents/"* "\$TEMPLATE_DIR_EXPANDED/Documents/" 2>/dev/null || log_generated_script_message "No documents to copy or error during copy."
 
 # Set correct ownership for all template files
-chown -R root:root "$TEMPLATE_DIR"
-chmod -R 755 "$TEMPLATE_DIR"
+log_generated_script_message "Setting ownership of \$TEMPLATE_DIR_EXPANDED to root:root and permissions to 755 recursively..."
+chown -R root:root "\$TEMPLATE_DIR_EXPANDED"
+chmod -R 755 "\$TEMPLATE_DIR_EXPANDED"
 
-echo "\$(date): Admin changes saved successfully." >> "\$LOGFILE"
+log_generated_script_message "Admin changes saved successfully."
 EOF
 
   chmod +x "$SAVE_ADMIN_SCRIPT"
+  log_message "save_admin_changes.sh script created and made executable."
 }
 
 # Function to create systemd service for saving admin changes
 create_systemd_service() {
+  log_message "Starting create_systemd_service..."
+  # Ensure OPT_KIOSK_DIR is set
+  if [ -z "$OPT_KIOSK_DIR" ]; then
+    log_message "Error: OPT_KIOSK_DIR not set in create_systemd_service."
+    return 1
+  fi
   SYSTEMD_SERVICE="/etc/systemd/system/save-admin-changes.service"
+  log_message "Systemd service file for saving admin changes: $SYSTEMD_SERVICE"
 
   cat > "$SYSTEMD_SERVICE" << EOF
 [Unit]
 Description=Save admin changes to kiosk template directory
-Before=lightdm.service
+Before=lightdm.service # Or appropriate display manager service
 
 [Service]
 Type=oneshot
 ExecStart=$OPT_KIOSK_DIR/save_admin_changes.sh
 RemainAfterExit=yes
+StandardOutput=append:$LOG_DIR/save-admin-changes.service.log
+StandardError=append:$LOG_DIR/save-admin-changes.service.err
 
 [Install]
 WantedBy=multi-user.target
 EOF
+  log_message "Systemd service definition for save-admin-changes created."
 
   # Enable the service
+  log_message "Enabling save-admin-changes.service..."
   systemctl enable save-admin-changes.service
+  log_message "save-admin-changes.service enabled."
 }
 
 # Function to create systemd service for kiosk home initialization
 create_kiosk_init_service() {
+  log_message "Starting create_kiosk_init_service..."
+  # Ensure KIOSK_USERNAME and TEMPLATE_DIR are set
+  if [ -z "$KIOSK_USERNAME" ] || [ -z "$TEMPLATE_DIR" ]; then
+    log_message "Error: KIOSK_USERNAME or TEMPLATE_DIR not set in create_kiosk_init_service."
+    return 1
+  fi
   KIOSK_INIT_SERVICE="/etc/systemd/system/kiosk-home-init.service"
+  log_message "Systemd service file for kiosk home initialization: $KIOSK_INIT_SERVICE"
+
+  # Define log files for the ExecStart command within the service file
+  KIOSK_INIT_SERVICE_LOG="$LOG_DIR/kiosk-home-init.service.log"
+  KIOSK_INIT_SERVICE_ERR="$LOG_DIR/kiosk-home-init.service.err"
+
+  # Construct the ExecStart command with logging
+  # The command is complex, so building it step-by-step for clarity
+  EXEC_START_CMD="/bin/bash -c \""
+  EXEC_START_CMD+="echo \\\"\$(date '+%Y-%m-%d %H:%M:%S') - Starting kiosk home initialization...\\\" >> $KIOSK_INIT_SERVICE_LOG 2>> $KIOSK_INIT_SERVICE_ERR && "
+  EXEC_START_CMD+="mkdir -p /home/$KIOSK_USERNAME/.config/autostart >> $KIOSK_INIT_SERVICE_LOG 2>> $KIOSK_INIT_SERVICE_ERR && "
+  EXEC_START_CMD+="cp -r $TEMPLATE_DIR/.config/autostart/* /home/$KIOSK_USERNAME/.config/autostart/ >> $KIOSK_INIT_SERVICE_LOG 2>> $KIOSK_INIT_SERVICE_ERR && "
+  EXEC_START_CMD+="mkdir -p /home/$KIOSK_USERNAME/Desktop >> $KIOSK_INIT_SERVICE_LOG 2>> $KIOSK_INIT_SERVICE_ERR && "
+  EXEC_START_CMD+="cp -r $TEMPLATE_DIR/Desktop/* /home/$KIOSK_USERNAME/Desktop/ >> $KIOSK_INIT_SERVICE_LOG 2>> $KIOSK_INIT_SERVICE_ERR && "
+  EXEC_START_CMD+="mkdir -p /home/$KIOSK_USERNAME/Documents >> $KIOSK_INIT_SERVICE_LOG 2>> $KIOSK_INIT_SERVICE_ERR && "
+  EXEC_START_CMD+="cp -r $TEMPLATE_DIR/Documents/* /home/$KIOSK_USERNAME/Documents/ 2>/dev/null || echo \\\"\$(date '+%Y-%m-%d %H:%M:%S') - No documents to copy or error during copy (Documents)\\\" >> $KIOSK_INIT_SERVICE_LOG && "
+  EXEC_START_CMD+="if [ -d '$TEMPLATE_DIR/.mozilla' ]; then "
+  EXEC_START_CMD+="  echo \\\"\$(date '+%Y-%m-%d %H:%M:%S') - Copying .mozilla directory...\\\" >> $KIOSK_INIT_SERVICE_LOG 2>> $KIOSK_INIT_SERVICE_ERR && "
+  EXEC_START_CMD+="  cp -r $TEMPLATE_DIR/.mozilla /home/$KIOSK_USERNAME/ >> $KIOSK_INIT_SERVICE_LOG 2>> $KIOSK_INIT_SERVICE_ERR && "
+  EXEC_START_CMD+="  if [ -f '$TEMPLATE_DIR/.firefox_profile_type' ] && [ \\\$(cat '$TEMPLATE_DIR/.firefox_profile_type') = 'flatpak' ]; then "
+  EXEC_START_CMD+="    echo \\\"\$(date '+%Y-%m-%d %H:%M:%S') - Setting up Flatpak Firefox directory structure...\\\" >> $KIOSK_INIT_SERVICE_LOG 2>> $KIOSK_INIT_SERVICE_ERR && "
+  EXEC_START_CMD+="    mkdir -p /home/$KIOSK_USERNAME/.var/app/org.mozilla.firefox >> $KIOSK_INIT_SERVICE_LOG 2>> $KIOSK_INIT_SERVICE_ERR; "
+  EXEC_START_CMD+="  fi; "
+  EXEC_START_CMD+="fi && "
+  EXEC_START_CMD+="echo \\\"\$(date '+%Y-%m-%d %H:%M:%S') - Setting ownership for /home/$KIOSK_USERNAME...\\\" >> $KIOSK_INIT_SERVICE_LOG 2>> $KIOSK_INIT_SERVICE_ERR && "
+  EXEC_START_CMD+="chown -R $KIOSK_USERNAME:$KIOSK_USERNAME /home/$KIOSK_USERNAME/ >> $KIOSK_INIT_SERVICE_LOG 2>> $KIOSK_INIT_SERVICE_ERR && "
+  EXEC_START_CMD+="echo \\\"\$(date '+%Y-%m-%d %H:%M:%S') - Kiosk home initialization complete.\\\" >> $KIOSK_INIT_SERVICE_LOG 2>> $KIOSK_INIT_SERVICE_ERR"
+  EXEC_START_CMD+="\""
 
   cat > "$KIOSK_INIT_SERVICE" << EOF
 [Unit]
 Description=Initialize Kiosk User Home Directory
 After=local-fs.target
-Before=display-manager.service
+Before=display-manager.service # Or appropriate display manager service
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c "mkdir -p /home/$KIOSK_USERNAME/.config/autostart && cp -r $TEMPLATE_DIR/.config/autostart/* /home/$KIOSK_USERNAME/.config/autostart/ && mkdir -p /home/$KIOSK_USERNAME/Desktop && cp -r $TEMPLATE_DIR/Desktop/* /home/$KIOSK_USERNAME/Desktop/ && mkdir -p /home/$KIOSK_USERNAME/Documents && cp -r $TEMPLATE_DIR/Documents/* /home/$KIOSK_USERNAME/Documents/ 2>/dev/null || true && if [ -d '$TEMPLATE_DIR/.mozilla' ]; then cp -r $TEMPLATE_DIR/.mozilla /home/$KIOSK_USERNAME/ && if [ -f '$TEMPLATE_DIR/.firefox_profile_type' ] && [ \\$(cat '$TEMPLATE_DIR/.firefox_profile_type') = 'flatpak' ]; then mkdir -p /home/$KIOSK_USERNAME/.var/app/org.mozilla.firefox; fi; fi && chown -R $KIOSK_USERNAME:$KIOSK_USERNAME /home/$KIOSK_USERNAME/"
+ExecStart=$EXEC_START_CMD
 RemainAfterExit=yes
+# StandardOutput and StandardError are handled by redirection within ExecStart for more granular logging
 
 [Install]
 WantedBy=multi-user.target
 EOF
+  log_message "Systemd service definition for kiosk-home-init created."
 
   # Enable the service
+  log_message "Enabling kiosk-home-init.service..."
   systemctl enable kiosk-home-init.service
+  log_message "kiosk-home-init.service enabled."
 }
 
-# Function to initialize kiosk environment
+# Function to initialize kiosk environment (script run on user login)
 create_init_kiosk_script() {
+  log_message "Starting create_init_kiosk_script..."
+  # Ensure OPT_KIOSK_DIR and TEMPLATE_DIR are set
+  if [ -z "$OPT_KIOSK_DIR" ] || [ -z "$TEMPLATE_DIR" ]; then
+    log_message "Error: OPT_KIOSK_DIR or TEMPLATE_DIR not set in create_init_kiosk_script."
+    return 1
+  fi
   INIT_SCRIPT="$OPT_KIOSK_DIR/init_kiosk.sh"
+  log_message "Kiosk init script will be created at: $INIT_SCRIPT"
+
+  # Define the log file path for the generated script
+  GENERATED_INIT_LOG_FILE="$LOG_DIR/kiosk_init_generated_script.log" # Use the global LOG_DIR
 
   cat > "$INIT_SCRIPT" << EOF
 #!/bin/bash
@@ -280,10 +480,23 @@ create_init_kiosk_script() {
 # Script to initialize kiosk environment on login
 
 # Log initialization
-LOGFILE="/tmp/kiosk_init.log"
-echo "\$(date): Initializing kiosk environment..." >> "\$LOGFILE"
+# Using the path directly from the parent script's LOG_DIR variable.
+LOGFILE="$GENERATED_INIT_LOG_FILE"
+mkdir -p "$(dirname "\$LOGFILE")" # Ensure directory exists when script runs
+
+log_kiosk_init_message() {
+    echo "\$(date '+%Y-%m-%d %H:%M:%S') - \$1" >> "\$LOGFILE"
+}
+
+log_kiosk_init_message "Executing init_kiosk.sh: Initializing kiosk environment..."
+
+# TEMPLATE_DIR is expanded here by the master_profile.sh script
+# So, its value will be hardcoded into the generated init_kiosk.sh script.
+LOCAL_TEMPLATE_DIR="$TEMPLATE_DIR"
+log_kiosk_init_message "TEMPLATE_DIR for this run: \$LOCAL_TEMPLATE_DIR"
 
 # Create necessary directories if they don't exist
+log_kiosk_init_message "Creating standard user directories if they don't exist..."
 mkdir -p ~/Desktop
 mkdir -p ~/Documents
 mkdir -p ~/Downloads
@@ -291,106 +504,124 @@ mkdir -p ~/Pictures
 mkdir -p ~/.config/autostart
 mkdir -p ~/.local/share/applications
 
-# Copy template files to kiosk home directory
-TEMPLATE_DIR="$TEMPLATE_DIR"
-
-# Store the Firefox profile source type for later use
-FF_PROFILE_TYPE="unknown"
-if [[ "\$FF_PROFILE_SOURCE_DIR" == *"/snap/firefox/"* ]]; then
-  FF_PROFILE_TYPE="snap"
-elif [[ "\$FF_PROFILE_SOURCE_DIR" == *".var/app/org.mozilla.firefox"* ]]; then
-  FF_PROFILE_TYPE="flatpak"
-elif [[ "\$FF_PROFILE_SOURCE_DIR" == *".mozilla"* ]]; then
-  FF_PROFILE_TYPE="traditional"
-fi
-
-# Create a file to indicate the Firefox profile type
-echo "\$FF_PROFILE_TYPE" > "\$TEMPLATE_DIR/.firefox_profile_type"
-
 # Copy Firefox profile if it exists
-if [ -d "\$TEMPLATE_DIR/.mozilla" ]; then
-  echo "\$(date): Copying Firefox profile from template..." >> "\$LOGFILE"
+if [ -d "\$LOCAL_TEMPLATE_DIR/.mozilla" ]; then
+  log_kiosk_init_message "Copying Firefox profile from template \$LOCAL_TEMPLATE_DIR/.mozilla to ~/.mozilla..."
   rm -rf ~/.mozilla  # Remove any existing profile
-  cp -r "\$TEMPLATE_DIR/.mozilla" ~/
+  cp -r "\$LOCAL_TEMPLATE_DIR/.mozilla" ~/
+  log_kiosk_init_message "Firefox profile copied."
   
   # Get the Firefox profile type
-  FF_PROFILE_TYPE="unknown"
-  if [ -f "\$TEMPLATE_DIR/.firefox_profile_type" ]; then
-    FF_PROFILE_TYPE=\$(cat "\$TEMPLATE_DIR/.firefox_profile_type")
+  LOCAL_FF_PROFILE_TYPE="unknown"
+  if [ -f "\$LOCAL_TEMPLATE_DIR/.firefox_profile_type" ]; then
+    LOCAL_FF_PROFILE_TYPE=\$(cat "\$LOCAL_TEMPLATE_DIR/.firefox_profile_type")
+    log_kiosk_init_message "Read Firefox profile type from template: \$LOCAL_FF_PROFILE_TYPE"
+  else
+    log_kiosk_init_message "Firefox profile type indicator file not found in template: \$LOCAL_TEMPLATE_DIR/.firefox_profile_type"
   fi
   
   # Ensure proper ownership of Firefox profile directories
+  log_kiosk_init_message "Setting permissions for ~/.mozilla to 700."
   chmod -R 700 ~/.mozilla
   
   # Handle Flatpak Firefox installation
-  if [ "\$FF_PROFILE_TYPE" = "flatpak" ]; then
-    echo "\$(date): Setting up Flatpak Firefox directories..." >> "\$LOGFILE"
+  if [ "\$LOCAL_FF_PROFILE_TYPE" = "flatpak" ]; then
+    log_kiosk_init_message "Setting up Flatpak Firefox directories in user's home as profile type is Flatpak..."
     # Create .var directory structure if it doesn't exist
     mkdir -p ~/.var/app/org.mozilla.firefox
     # Set proper ownership and permissions
+    log_kiosk_init_message "Setting permissions for ~/.var to 700."
     chmod -R 700 ~/.var
   fi
+else
+  log_kiosk_init_message "Firefox profile directory not found in template: \$LOCAL_TEMPLATE_DIR/.mozilla. Skipping copy."
 fi
 
 # Copy desktop shortcuts if they exist
-if [ -d "\$TEMPLATE_DIR/Desktop" ]; then
-  echo "\$(date): Copying desktop shortcuts from template..." >> "\$LOGFILE"
-  cp -r "\$TEMPLATE_DIR/Desktop/"* ~/Desktop/ 2>/dev/null || true
+if [ -d "\$LOCAL_TEMPLATE_DIR/Desktop" ]; then
+  log_kiosk_init_message "Copying desktop shortcuts from \$LOCAL_TEMPLATE_DIR/Desktop/ to ~/Desktop/..."
+  cp -r "\$LOCAL_TEMPLATE_DIR/Desktop/"* ~/Desktop/ 2>/dev/null || log_kiosk_init_message "No desktop shortcuts to copy or error during copy."
 fi
 
 # Copy documents if they exist
-if [ -d "\$TEMPLATE_DIR/Documents" ]; then
-  echo "\$(date): Copying documents from template..." >> "\$LOGFILE"
-  cp -r "\$TEMPLATE_DIR/Documents/"* ~/Documents/ 2>/dev/null || true
+if [ -d "\$LOCAL_TEMPLATE_DIR/Documents" ]; then
+  log_kiosk_init_message "Copying documents from \$LOCAL_TEMPLATE_DIR/Documents/ to ~/Documents/..."
+  cp -r "\$LOCAL_TEMPLATE_DIR/Documents/"* ~/Documents/ 2>/dev/null || log_kiosk_init_message "No documents to copy or error during copy."
 fi
 
 # Copy autostart entries if they exist
-if [ -d "\$TEMPLATE_DIR/.config/autostart" ]; then
-  echo "\$(date): Copying autostart entries from template..." >> "\$LOGFILE"
-  cp -r "\$TEMPLATE_DIR/.config/autostart/"* ~/.config/autostart/ 2>/dev/null || true
+if [ -d "\$LOCAL_TEMPLATE_DIR/.config/autostart" ]; then
+  log_kiosk_init_message "Copying autostart entries from \$LOCAL_TEMPLATE_DIR/.config/autostart/ to ~/.config/autostart/..."
+  cp -r "\$LOCAL_TEMPLATE_DIR/.config/autostart/"* ~/.config/autostart/ 2>/dev/null || log_kiosk_init_message "No autostart entries to copy or error during copy."
 fi
 
-echo "\$(date): Kiosk environment initialized successfully." >> "\$LOGFILE"
+log_kiosk_init_message "Kiosk environment initialized successfully."
 EOF
 
   chmod +x "$INIT_SCRIPT"
+  log_message "init_kiosk.sh script created and made executable."
 }
 
 # Main execution
-echo "Setting up master profile feature..."
+log_message "Starting main execution: Setting up master profile feature..."
+
+# Source environment variables if they exist (e.g., .env file)
+# This is important for ADMIN_USERNAME, KIOSK_USERNAME, TEMPLATE_DIR, OPT_KIOSK_DIR
+# Example: if [ -f .env ]; then source .env; fi
+# For now, assuming these are set in the environment or a sourced config file.
+log_message "Checking required variables: ADMIN_USERNAME='${ADMIN_USERNAME}', KIOSK_USERNAME='${KIOSK_USERNAME}', TEMPLATE_DIR='${TEMPLATE_DIR}', OPT_KIOSK_DIR='${OPT_KIOSK_DIR}'"
+
 
 # Create the necessary scripts
+log_message "Calling create_save_admin_script..."
 create_save_admin_script
+log_message "Calling create_init_kiosk_script..."
 create_init_kiosk_script
 
 # Create the systemd services
+log_message "Calling create_systemd_service (for save-admin-changes)..."
 create_systemd_service
+log_message "Calling create_kiosk_init_service..."
 create_kiosk_init_service
 
 # Perform an initial save of admin changes
+log_message "Performing initial save_admin_changes..."
 save_admin_changes
 
 # Copy the autostart entries and desktop shortcut to the kiosk user's home directory if it exists
-if [ -d "/home/$KIOSK_USERNAME" ]; then
+# This part might be redundant if kiosk-home-init.service runs correctly on first boot after setup.
+# However, it can be useful for immediate setup if the kiosk user already exists.
+if [ -n "$KIOSK_USERNAME" ] && [ -d "/home/$KIOSK_USERNAME" ]; then
+  log_message "Kiosk user home directory /home/$KIOSK_USERNAME exists. Proceeding with initial content copy."
   mkdir -p "/home/$KIOSK_USERNAME/.config/autostart"
   mkdir -p "/home/$KIOSK_USERNAME/Desktop"
   mkdir -p "/home/$KIOSK_USERNAME/Documents"
   
   # Copy from template to kiosk user
   if [ -d "$TEMPLATE_DIR/.config/autostart" ]; then
-    cp -r "$TEMPLATE_DIR/.config/autostart/"* "/home/$KIOSK_USERNAME/.config/autostart/" 2>/dev/null || true
+    log_message "Copying $TEMPLATE_DIR/.config/autostart to /home/$KIOSK_USERNAME/.config/autostart/"
+    cp -r "$TEMPLATE_DIR/.config/autostart/"* "/home/$KIOSK_USERNAME/.config/autostart/" 2>/dev/null || log_message "Error or no files copying autostart entries to kiosk user."
   fi
   
   if [ -d "$TEMPLATE_DIR/Desktop" ]; then
-    cp -r "$TEMPLATE_DIR/Desktop/"* "/home/$KIOSK_USERNAME/Desktop/" 2>/dev/null || true
+    log_message "Copying $TEMPLATE_DIR/Desktop to /home/$KIOSK_USERNAME/Desktop/"
+    cp -r "$TEMPLATE_DIR/Desktop/"* "/home/$KIOSK_USERNAME/Desktop/" 2>/dev/null || log_message "Error or no files copying desktop entries to kiosk user."
   fi
   
   if [ -d "$TEMPLATE_DIR/Documents" ]; then
-    cp -r "$TEMPLATE_DIR/Documents/"* "/home/$KIOSK_USERNAME/Documents/" 2>/dev/null || true
+    log_message "Copying $TEMPLATE_DIR/Documents to /home/$KIOSK_USERNAME/Documents/"
+    cp -r "$TEMPLATE_DIR/Documents/"* "/home/$KIOSK_USERNAME/Documents/" 2>/dev/null || log_message "Error or no files copying documents to kiosk user."
   fi
   
   # Set correct ownership
+  log_message "Setting ownership for /home/$KIOSK_USERNAME to $KIOSK_USERNAME:$KIOSK_USERNAME"
   chown -R "$KIOSK_USERNAME:$KIOSK_USERNAME" "/home/$KIOSK_USERNAME/"
+else
+  if [ -z "$KIOSK_USERNAME" ]; then
+    log_message "KIOSK_USERNAME not set. Skipping initial content copy to kiosk user home."
+  else
+    log_message "Kiosk user home directory /home/$KIOSK_USERNAME does not exist. Skipping initial content copy."
+  fi
 fi
 
-echo "Master profile feature setup complete."
+log_message "Master profile feature setup complete."

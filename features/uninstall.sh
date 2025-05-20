@@ -7,7 +7,8 @@
 set -e
 
 # Setup logging
-LOG_FILE="setup.log"
+LOG_DIR="/var/log/kiosk"
+LOG_FILE="$LOG_DIR/uninstall.sh.log" # Changed log file path
 ENABLE_LOGGING=true
 
 # Process command line arguments
@@ -24,9 +25,15 @@ for arg in "$@"; do
   esac
 done
 
-# Initialize log file if logging is enabled
+# Create log directory and initialize log file if logging is enabled
 if $ENABLE_LOGGING; then
-  echo "=== Kiosk Uninstall Log $(date) ===" >> "$LOG_FILE"
+  mkdir -p "$LOG_DIR" # Create log directory if it doesn't exist
+  chmod 755 "$LOG_DIR" # Ensure root can write, others can read/execute
+  # Ensure the log file itself is writable by root
+  touch "$LOG_FILE"
+  chmod 644 "$LOG_FILE" # Root r/w, others read
+
+  echo "=== Kiosk Uninstall Log $(date) ===" > "$LOG_FILE" # Ensure this writes to the new LOG_FILE
   echo "Command: $0 $@" >> "$LOG_FILE"
   echo "----------------------------------------" >> "$LOG_FILE"
 fi
@@ -34,7 +41,7 @@ fi
 # Function to log messages
 log_message() {
   local message="$1"
-  local level="${2:-INFO}"
+  local level="${2:-INFO}" # Default level is INFO
   local timestamp=$(date "+%Y-%m-%d %H:%M:%S")
   
   if $ENABLE_LOGGING; then

@@ -3,28 +3,40 @@
 # ZorinOS Kiosk WiFi Setup Script
 # Feature: Hide network settings from kiosk user and configure WiFi
 
-echo "[DEBUG] Starting wifi.sh script"
-echo "[DEBUG] Script path: $(readlink -f "$0")"
-echo "[DEBUG] Current directory: $(pwd)"
+LOG_DIR="/var/log/kiosk"
+LOG_FILE="$LOG_DIR/wifi.sh.log"
+
+# Ensure log directory exists
+mkdir -p "$LOG_DIR"
+chmod 755 "$LOG_DIR"
+touch "$LOG_FILE"
+chmod 644 "$LOG_FILE"
+
+log_message() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG_FILE"
+}
+
+log_message "Starting wifi.sh script. Path: $(readlink -f "$0"), Current directory: $(pwd)"
 
 # Exit on any error
 set -e
-echo "[DEBUG] Error handling enabled with 'set -e'"
+log_message "Error handling enabled with 'set -e'"
 
 # Check if running as root
-echo "[DEBUG] Checking if script is running as root"
+log_message "Checking if script is running as root"
 if [ "$(id -u)" -ne 0 ]; then
-  echo "[ERROR] This script must be run as root. Please use sudo."
+  log_message "Error: This script must be run as root. Please use sudo."
+  echo "[ERROR] This script must be run as root. Please use sudo." # Keep for direct user feedback
   exit 1
 fi
-echo "[DEBUG] Script is running as root, continuing"
+log_message "Script is running as root, continuing"
 
 # Source the environment file
-echo "[DEBUG] Checking for environment file"
+log_message "Checking for environment file"
 if [ -z "$ENV_FILE" ]; then
   # Look for the environment file next to kiosk_setup.sh
   ENV_FILE="$(dirname "$0")/../.env"
-  echo "[DEBUG] ENV_FILE not defined, using default: $ENV_FILE"
+  log_message "ENV_FILE not defined, using default: $ENV_FILE"
   
   # If not found, try looking in the same directory as kiosk_setup.sh
   if [ ! -f "$ENV_FILE" ]; then
@@ -32,94 +44,95 @@ if [ -z "$ENV_FILE" ]; then
     for file in "$PARENT_DIR"/*.sh; do
       if [ -f "$file" ] && grep -q "kiosk_setup" "$file"; then
         ENV_FILE="$(dirname "$file")/.env"
-        echo "[DEBUG] Looking for .env next to kiosk_setup.sh: $ENV_FILE"
+        log_message "Looking for .env next to kiosk_setup.sh: $ENV_FILE"
         break
       fi
     done
   fi
 fi
 
-echo "[DEBUG] Checking if environment file exists at: $ENV_FILE"
+log_message "Checking if environment file exists at: $ENV_FILE"
 if [ ! -f "$ENV_FILE" ]; then
-  echo "[ERROR] Environment file not found at $ENV_FILE"
-  echo "[ERROR] Please specify the correct path using the ENV_FILE variable."
+  log_message "Error: Environment file not found at $ENV_FILE. Please specify the correct path using the ENV_FILE variable."
+  echo "[ERROR] Environment file not found at $ENV_FILE" # Keep for direct user feedback
+  echo "[ERROR] Please specify the correct path using the ENV_FILE variable." # Keep for direct user feedback
   exit 1
 fi
 
-echo "[DEBUG] Sourcing environment file: $ENV_FILE"
+log_message "Sourcing environment file: $ENV_FILE"
 source "$ENV_FILE"
-echo "[DEBUG] Environment file sourced successfully"
+log_message "Environment file sourced successfully. WIFI_SSID=${WIFI_SSID}" # Don't log WIFI_PASSWORD
 
 # Function to ensure required packages are installed
 ensure_wifi_packages() {
-  echo "[DEBUG] Ensuring required WiFi packages are installed"
+  log_message "Ensuring required WiFi packages are installed"
   
   # List of required packages
-  local packages="network-manager wireless-tools wpasupplicant iw net-tools"
+  local packages="network-manager wireless-tools wpasupplicant iw net-tools uuid-runtime" # Added uuid-runtime for uuidgen
   local missing_packages=""
   
   # Check which packages are missing
   for pkg in $packages; do
-    if ! dpkg -l | grep -q "ii  $pkg "; then
+    if ! dpkg -l | grep -q "ii  $pkg "; then # Added space after $pkg for exact match
       missing_packages="$missing_packages $pkg"
     fi
   done
   
   # Install missing packages if any
   if [ -n "$missing_packages" ]; then
-    echo "[DEBUG] Installing missing packages:$missing_packages"
+    log_message "Installing missing packages:$missing_packages"
     # Try multiple package installation methods
     if ! apt update && apt install -y $missing_packages; then
-      echo "[DEBUG] First attempt failed, trying without update..."
+      log_message "First attempt (apt update && apt install) failed, trying without update..."
       if ! apt install -y $missing_packages; then
-        echo "[DEBUG] Direct install failed, trying packages individually..."
+        log_message "Direct install (apt install) failed, trying packages individually..."
         local install_failed=0
-        for pkg in $missing_packages; do
-          if ! apt install -y $pkg; then
-            echo "[WARNING] Failed to install package: $pkg"
+        for pkg_indiv in $missing_packages; do # Use different var name
+          if ! apt install -y "$pkg_indiv"; then # Quote pkg_indiv
+            log_message "Warning: Failed to install package: $pkg_indiv"
             install_failed=1
           fi
         done
         if [ $install_failed -eq 1 ]; then
-          echo "[WARNING] Some packages failed to install, but continuing..."
+          log_message "Warning: Some packages failed to install, but continuing..."
         fi
       fi
     fi
-    echo "[DEBUG] Package installation completed"
+    log_message "Package installation attempt completed."
   else
-    echo "[DEBUG] All required packages are already installed"
+    log_message "All required WiFi packages are already installed."
   fi
   
   return 0
 }
 
 # Hide network settings from kiosk user
-echo "[DEBUG] Feature: Restricting network settings access"
+log_message "Feature: Restricting network settings access"
 
 # Check if dconf is installed
-echo "[DEBUG] Checking if dconf is installed"
+log_message "Checking if dconf is installed"
 if ! command -v dconf &> /dev/null; then
-  echo "[DEBUG] dconf not found, installing dconf-cli package"
+  log_message "dconf not found, attempting to install dconf-cli package..."
   apt update && apt install -y dconf-cli || {
-    echo "[ERROR] Failed to install dconf-cli. Network settings restrictions may not work properly."
+    log_message "Error: Failed to install dconf-cli. Network settings restrictions may not work properly."
     # Continue script execution despite error
   }
 fi
-echo "[DEBUG] dconf is available"
+log_message "dconf is available."
 
 # Create a policy to hide network settings from standard users
-echo "[DEBUG] Creating dconf profile directory"
+log_message "Creating dconf profile directory /etc/dconf/profile/..."
 mkdir -p /etc/dconf/profile/
-echo "[DEBUG] Writing user profile configuration"
+log_message "Writing user profile configuration to /etc/dconf/profile/user..."
 echo "user-db:user
 system-db:local" > /etc/dconf/profile/user
 
 # Create directory for dconf database files
-echo "[DEBUG] Creating dconf database directory"
+log_message "Creating dconf database directory /etc/dconf/db/local.d/..."
 mkdir -p /etc/dconf/db/local.d/
 
 # Create network settings restrictions
-echo "[DEBUG] Creating network settings restrictions file"
+log_message "Creating network settings restrictions file /etc/dconf/db/local.d/00-network..."
 cat > /etc/dconf/db/local.d/00-network << EOF
 [org/gnome/nm-applet]
 disable-connected-notifications=true
@@ -130,12 +143,12 @@ suppress-wireless-networks-available=true
 sleep-inactive-ac-type='nothing'
 sleep-inactive-battery-type='nothing'
 EOF
-echo "[DEBUG] Network settings restrictions file created"
+log_message "Network settings restrictions file created."
 
 # Create locks to prevent user from changing these settings
-echo "[DEBUG] Creating dconf locks directory"
+log_message "Creating dconf locks directory /etc/dconf/db/local.d/locks/..."
 mkdir -p /etc/dconf/db/local.d/locks/
-echo "[DEBUG] Creating network settings locks file"
+log_message "Creating network settings locks file /etc/dconf/db/local.d/locks/network..."
 cat > /etc/dconf/db/local.d/locks/network << EOF
 /org/gnome/nm-applet/disable-connected-notifications
 /org/gnome/nm-applet/disable-disconnected-notifications
@@ -143,64 +156,72 @@ cat > /etc/dconf/db/local.d/locks/network << EOF
 /org/gnome/settings-daemon/plugins/power/sleep-inactive-ac-type
 /org/gnome/settings-daemon/plugins/power/sleep-inactive-battery-type
 EOF
-echo "[DEBUG] Network settings locks file created"
+log_message "Network settings locks file created."
 
 # Update the dconf database
-echo "[DEBUG] Updating dconf database"
+log_message "Updating dconf database..."
 dconf update || {
-  echo "[ERROR] Failed to update dconf database. Network settings restrictions may not be applied."
+  log_message "Error: Failed to update dconf database. Network settings restrictions may not be applied."
   # Continue script execution despite error
 }
-
-echo "[DEBUG] Network settings restrictions applied successfully"
+log_message "Network settings restrictions applied successfully."
 
 # Function to configure WiFi
 configure_wifi() {
   local ssid="$1"
   local password="$2"
   
-  echo "[DEBUG] Configuring WiFi connection for SSID: $ssid"
+  log_message "Configuring WiFi connection for SSID: $ssid"
   
   # Check if NetworkManager is installed
-  echo "[DEBUG] Checking if NetworkManager is installed"
+  log_message "Checking if NetworkManager (nmcli) is installed"
   if command -v nmcli &> /dev/null; then
-    echo "[DEBUG] NetworkManager found, proceeding with configuration"
+    log_message "NetworkManager (nmcli) found, proceeding with configuration."
     
     # Get the WiFi interface name
-    echo "[DEBUG] Getting WiFi interface name"
-    local wifi_interface=$(nmcli device status | grep wifi | awk '{print $1}' | head -n 1)
+    log_message "Getting WiFi interface name..."
+    local wifi_interface=$(nmcli -t -f DEVICE,TYPE device status | grep ':wifi$' | cut -d':' -f1 | head -n 1)
     if [ -z "$wifi_interface" ]; then
-      echo "[ERROR] No WiFi interface found. Make sure WiFi hardware is enabled."
+      log_message "Error: No WiFi interface found. Make sure WiFi hardware is enabled."
       return 1
     fi
-    echo "[DEBUG] Found WiFi interface: $wifi_interface"
+    log_message "Found WiFi interface: $wifi_interface"
     
     # Ensure WiFi is enabled
-    echo "[DEBUG] Ensuring WiFi is enabled"
+    log_message "Ensuring WiFi is enabled via nmcli radio wifi on..."
     nmcli radio wifi on
     
     # Scan for networks to refresh the list
-    echo "[DEBUG] Scanning for WiFi networks"
-    nmcli device wifi rescan
+    log_message "Scanning for WiFi networks (nmcli device wifi rescan)..."
+    nmcli device wifi rescan || log_message "Warning: nmcli device wifi rescan command failed, but continuing."
     sleep 2  # Give it time to scan
     
     # Check if connection already exists
-    echo "[DEBUG] Checking if connection already exists"
-    if nmcli -t -f NAME connection show | grep -q "^${ssid}$"; then
-      echo "[DEBUG] WiFi connection for $ssid already exists, deleting it first"
-      nmcli connection delete "$ssid"
-      echo "[DEBUG] Existing connection deleted"
+    log_message "Checking if connection '$ssid' already exists..."
+    if nmcli -t -f NAME connection show | grep -q "^${ssid}$"; then # Exact match for SSID
+      log_message "WiFi connection for '$ssid' already exists, deleting it first..."
+      nmcli connection delete "$ssid" || log_message "Warning: Failed to delete existing connection '$ssid'."
+      log_message "Existing connection '$ssid' deleted."
     fi
     
     # Create a new connection with explicit security settings
-    echo "[DEBUG] Creating new WiFi connection for $ssid with explicit security settings"
+    log_message "Creating new WiFi connection for '$ssid' using nmconnection file..."
     
     # Create a connection file instead of using the simple connect command
-    local UUID=$(uuidgen)
-    local CONN_FILE="/etc/NetworkManager/system-connections/${ssid}.nmconnection"
+    local UUID
+    if command -v uuidgen &>/dev/null; then
+        UUID=$(uuidgen)
+    else
+        log_message "Warning: uuidgen not found. Generating a pseudo-random UUID."
+        UUID=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || date +%s%N | md5sum | cut -c1-32) # Fallback
+    fi
+    log_message "Generated UUID for connection: $UUID"
+
+    local CONN_FILENAME="${ssid}.nmconnection" # Use a safe filename
+    local CONN_FILE_PATH="/etc/NetworkManager/system-connections/$CONN_FILENAME"
     
-    echo "[DEBUG] Creating connection file at $CONN_FILE"
-    cat > "$CONN_FILE" << EOF
+    log_message "Creating connection file at $CONN_FILE_PATH"
+    cat > "$CONN_FILE_PATH" << EOF
 [connection]
 id=$ssid
 uuid=$UUID
@@ -229,144 +250,156 @@ method=auto
 EOF
     
     # Set proper permissions for the connection file
-    echo "[DEBUG] Setting permissions for connection file"
-    chmod 600 "$CONN_FILE"
+    log_message "Setting permissions for connection file $CONN_FILE_PATH to 600..."
+    chmod 600 "$CONN_FILE_PATH"
     
     # Reload connections
-    echo "[DEBUG] Reloading NetworkManager connections"
-    nmcli connection reload
+    log_message "Reloading NetworkManager connections (nmcli connection reload)..."
+    nmcli connection reload || log_message "Warning: nmcli connection reload failed."
     
     # Activate the connection
-    echo "[DEBUG] Activating the WiFi connection"
-    nmcli connection up "$ssid" || {
-      echo "[ERROR] Failed to activate connection. Trying alternative method..."
+    log_message "Activating the WiFi connection '$ssid' (nmcli connection up)..."
+    if ! nmcli connection up "$ssid"; then
+      log_message "Error: Failed to activate connection '$ssid' with 'nmcli connection up'. Trying alternative method (nmcli device wifi connect)..."
       # Try alternative method with direct connect
-      nmcli device wifi connect "$ssid" password "$password" || {
-        echo "[ERROR] Both connection methods failed. Trying fallback method..."
+      if ! nmcli device wifi connect "$ssid" password "$password"; then
+        log_message "Error: Both 'nmcli connection up' and 'nmcli device wifi connect' failed. Trying wpa_supplicant fallback..."
         
         # Create a temporary wpa_supplicant configuration file
-        local WPA_CONF="/tmp/wpa_supplicant.conf"
-        echo "[DEBUG] Creating wpa_supplicant configuration file"
-        wpa_passphrase "$ssid" "$password" > "$WPA_CONF"
-        
-        if [ $? -eq 0 ]; then
+        local WPA_CONF="/tmp/wpa_supplicant_${ssid}.conf" # SSID in filename for uniqueness
+        log_message "Creating wpa_supplicant configuration file at $WPA_CONF..."
+        if wpa_passphrase "$ssid" "$password" > "$WPA_CONF"; then
+          log_message "wpa_supplicant configuration file created."
           # Stop NetworkManager temporarily
-          echo "[DEBUG] Stopping NetworkManager temporarily"
-          systemctl stop NetworkManager
+          log_message "Stopping NetworkManager temporarily..."
+          systemctl stop NetworkManager || log_message "Warning: Failed to stop NetworkManager."
           
           # Connect using wpa_supplicant directly
-          echo "[DEBUG] Connecting using wpa_supplicant directly"
-          wpa_supplicant -B -i "$wifi_interface" -c "$WPA_CONF"
-          
-          if [ $? -eq 0 ]; then
+          log_message "Connecting using wpa_supplicant directly (wpa_supplicant -B -i $wifi_interface -c $WPA_CONF)..."
+          if wpa_supplicant -B -i "$wifi_interface" -c "$WPA_CONF"; then
+            log_message "wpa_supplicant started in background."
             # Get IP address using DHCP
-            echo "[DEBUG] Getting IP address using DHCP"
-            dhclient "$wifi_interface"
+            log_message "Getting IP address using DHCP (dhclient $wifi_interface)..."
+            dhclient "$wifi_interface" || log_message "Warning: dhclient command failed."
             
             # Clean up
-            echo "[DEBUG] Cleaning up temporary files"
+            log_message "Cleaning up temporary wpa_supplicant file $WPA_CONF..."
             rm -f "$WPA_CONF"
             
             # Restart NetworkManager
-            echo "[DEBUG] Restarting NetworkManager"
-            systemctl start NetworkManager
+            log_message "Restarting NetworkManager..."
+            systemctl start NetworkManager || log_message "Warning: Failed to start NetworkManager."
             
             # Wait for NetworkManager to start
             sleep 5
             
             # Import the connection into NetworkManager
-            echo "[DEBUG] Importing the connection into NetworkManager"
-            nmcli connection add type wifi con-name "$ssid" ifname "$wifi_interface" ssid "$ssid" -- wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$password"
+            log_message "Importing the connection into NetworkManager..."
+            nmcli connection add type wifi con-name "$ssid" ifname "$wifi_interface" ssid "$ssid" -- wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$password" || log_message "Warning: Failed to import connection into NetworkManager."
             
-            echo "[DEBUG] Fallback WiFi connection created"
+            log_message "Fallback WiFi connection attempt completed."
           else
-            echo "[ERROR] Failed to connect using wpa_supplicant"
+            log_message "Error: Failed to connect using wpa_supplicant."
             # Clean up and restart NetworkManager
             rm -f "$WPA_CONF"
-            systemctl start NetworkManager
+            systemctl start NetworkManager || log_message "Warning: Failed to start NetworkManager after wpa_supplicant failure."
             return 1
           fi
         else
-          echo "[ERROR] Failed to create wpa_supplicant configuration"
+          log_message "Error: Failed to create wpa_supplicant configuration using wpa_passphrase."
           return 1
         fi
-      }
-    }
+      else
+        log_message "Successfully connected using 'nmcli device wifi connect'."
+      fi
+    else
+      log_message "Successfully activated connection '$ssid' using 'nmcli connection up'."
+    fi
     
     # Verify connection status
-    echo "[DEBUG] Verifying connection status"
+    log_message "Verifying connection status for '$ssid'..."
     if nmcli -t -f GENERAL.STATE connection show "$ssid" 2>/dev/null | grep -q "activated"; then
-      echo "[DEBUG] WiFi connection successfully activated"
+      log_message "WiFi connection '$ssid' successfully activated."
     else
-      echo "[WARNING] Connection created but not activated. It may connect automatically later."
+      log_message "Warning: Connection '$ssid' created but not activated. It may connect automatically later."
     fi
     
     # Set connection to autoconnect
-    echo "[DEBUG] Setting connection to autoconnect"
-    nmcli connection modify "$ssid" connection.autoconnect yes
+    log_message "Setting connection '$ssid' to autoconnect yes..."
+    nmcli connection modify "$ssid" connection.autoconnect yes || log_message "Warning: Failed to set autoconnect for '$ssid'."
     
     # Set connection to all users
-    echo "[DEBUG] Making connection available to all users"
-    nmcli connection modify "$ssid" connection.permissions ""
+    log_message "Making connection '$ssid' available to all users (permissions='')..."
+    nmcli connection modify "$ssid" connection.permissions "" || log_message "Warning: Failed to set permissions for '$ssid'."
     
-    echo "[DEBUG] WiFi configuration completed successfully"
+    log_message "WiFi configuration for '$ssid' completed."
     return 0
   else
-    echo "[DEBUG] NetworkManager not found, attempting to install"
+    log_message "NetworkManager (nmcli) not found, attempting to install..."
     if apt update && apt install -y network-manager; then
-      echo "[DEBUG] NetworkManager installed, restarting service"
-      systemctl restart NetworkManager
+      log_message "NetworkManager installed successfully. Restarting NetworkManager service..."
+      systemctl restart NetworkManager || log_message "Warning: Failed to restart NetworkManager service."
       
       # Wait for NetworkManager to start
-      echo "[DEBUG] Waiting for NetworkManager to initialize"
+      log_message "Waiting for NetworkManager to initialize (5 seconds)..."
       sleep 5
       
       # Verify NetworkManager is running
-      echo "[DEBUG] Verifying NetworkManager is running"
+      log_message "Verifying NetworkManager is running..."
       if systemctl is-active --quiet NetworkManager; then
-        echo "[DEBUG] NetworkManager is running, configuring WiFi"
+        log_message "NetworkManager is running. Re-attempting WiFi configuration for '$ssid'..."
         # Call this function again now that NetworkManager is installed
         configure_wifi "$ssid" "$password"
       else
-        echo "[ERROR] NetworkManager service failed to start. WiFi configuration skipped."
+        log_message "Error: NetworkManager service failed to start after installation. WiFi configuration skipped."
         return 1
       fi
     else
-      echo "[ERROR] Failed to install NetworkManager. WiFi configuration skipped."
+      log_message "Error: Failed to install NetworkManager. WiFi configuration skipped."
       return 1
     fi
   fi
-  return 0
+  return 0 # Should be unreachable if nmcli not found and install fails
 }
 
 # Function to detect WiFi security type
 detect_wifi_security() {
   local ssid="$1"
-  echo "[DEBUG] Detecting security type for SSID: $ssid"
+  log_message "Detecting security type for SSID: $ssid"
   
   # Scan for networks
-  nmcli device wifi rescan
-  sleep 2
+  log_message "Rescanning for WiFi networks to detect security for $ssid..."
+  nmcli device wifi rescan || log_message "Warning: nmcli device wifi rescan failed during security detection."
+  sleep 2 # Increased sleep to allow scan to complete
   
   # Get security info
-  local security_info=$(nmcli -t -f SSID,SECURITY device wifi list | grep "^${ssid}:" | cut -d':' -f2)
+  # Using a more robust grep to handle SSIDs with special characters if any (though nmcli output is usually clean)
+  local security_info=$(nmcli -t -f SSID,SECURITY device wifi list | grep "^${ssid}:" | head -n 1 | cut -d':' -f2)
   
   if [ -z "$security_info" ]; then
-    echo "[WARNING] Could not detect security type for $ssid, assuming WPA"
-    echo "WPA"
+    log_message "Warning: Could not detect security type for '$ssid' from nmcli output. Assuming WPA/WPA2."
+    echo "WPA2" # Default to WPA2 as it's common
     return
   fi
   
-  echo "[DEBUG] Detected security: $security_info"
+  log_message "Detected security string for '$ssid': $security_info"
   
-  if [[ "$security_info" == *"WPA2"* ]]; then
+  # Normalize and check security type
+  if echo "$security_info" | grep -qE "WPA2"; then # Check for WPA2 first
+    log_message "Interpreted security type as WPA2 for '$ssid'."
     echo "WPA2"
-  elif [[ "$security_info" == *"WPA"* ]]; then
+  elif echo "$security_info" | grep -qE "WPA"; then # Then WPA
+    log_message "Interpreted security type as WPA for '$ssid'."
     echo "WPA"
-  elif [[ "$security_info" == *"WEP"* ]]; then
+  elif echo "$security_info" | grep -qE "WEP"; then # Then WEP
+    log_message "Interpreted security type as WEP for '$ssid'."
     echo "WEP"
-  else
+  elif [ "$security_info" = "--" ] || [ -z "$security_info" ]; then # Open network
+    log_message "Interpreted security type as NONE (Open) for '$ssid'."
     echo "NONE"
+  else
+    log_message "Warning: Unrecognized security string '$security_info' for '$ssid'. Defaulting to WPA2."
+    echo "WPA2" # Default if unsure
   fi
 }
 
@@ -375,88 +408,93 @@ create_persistent_wifi_connection() {
   local ssid="$1"
   local password="$2"
   
-  echo "[DEBUG] Creating persistent WiFi connection for $ssid"
+  log_message "Creating persistent WiFi connection for SSID: $ssid"
   
   # Detect security type
-  local security_type=$(detect_wifi_security "$ssid")
-  echo "[DEBUG] Using security type: $security_type"
+  local security_type
+  security_type=$(detect_wifi_security "$ssid")
+  log_message "Using detected security type: $security_type for SSID: $ssid"
   
   # Create the NetworkManager connection directory if it doesn't exist
+  log_message "Ensuring NetworkManager system connections directory exists: /etc/NetworkManager/system-connections/"
   mkdir -p /etc/NetworkManager/system-connections/
   
   # Generate a UUID for the connection
-  local UUID=$(uuidgen)
+  local UUID_persistent
+   if command -v uuidgen &>/dev/null; then
+        UUID_persistent=$(uuidgen)
+    else
+        log_message "Warning: uuidgen not found for persistent connection. Generating a pseudo-random UUID."
+        UUID_persistent=$(cat /proc/sys/kernel/random/uuid 2>/dev/null || date +%s%N | md5sum | cut -c1-32) # Fallback
+    fi
+  log_message "Generated UUID for persistent connection '$ssid': $UUID_persistent"
   
   # Get the WiFi interface name
-  local wifi_interface=$(nmcli device status | grep wifi | awk '{print $1}' | head -n 1)
-  if [ -z "$wifi_interface" ]; then
-    echo "[WARNING] No WiFi interface found, using generic configuration"
+  local wifi_interface_persistent=$(nmcli -t -f DEVICE,TYPE device status | grep ':wifi$' | cut -d':' -f1 | head -n 1)
+  if [ -z "$wifi_interface_persistent" ]; then
+    log_message "Warning: No WiFi interface found for persistent connection '$ssid', using generic configuration (interface-name will be omitted)."
   else
-    echo "[DEBUG] Using WiFi interface: $wifi_interface"
+    log_message "Using WiFi interface: $wifi_interface_persistent for persistent connection '$ssid'."
   fi
   
   # Create the connection file
-  local CONN_FILE="/etc/NetworkManager/system-connections/${ssid}.nmconnection"
+  local CONN_FILENAME_PERSISTENT="${ssid}.nmconnection" # Use a safe filename
+  local CONN_FILE_PATH_PERSISTENT="/etc/NetworkManager/system-connections/$CONN_FILENAME_PERSISTENT"
   
-  echo "[DEBUG] Creating connection file at $CONN_FILE"
+  log_message "Creating connection file at $CONN_FILE_PATH_PERSISTENT for persistent connection '$ssid'."
   
   # Create base connection configuration
-  cat > "$CONN_FILE" << EOF
+  cat > "$CONN_FILE_PATH_PERSISTENT" << EOF
 [connection]
 id=$ssid
-uuid=$UUID
+uuid=$UUID_persistent
 type=wifi
 EOF
 
   # Add interface name if available
-  if [ -n "$wifi_interface" ]; then
-    echo "interface-name=$wifi_interface" >> "$CONN_FILE"
+  if [ -n "$wifi_interface_persistent" ]; then
+    echo "interface-name=$wifi_interface_persistent" >> "$CONN_FILE_PATH_PERSISTENT"
   fi
   
   # Add remaining connection settings
-  cat >> "$CONN_FILE" << EOF
+  cat >> "$CONN_FILE_PATH_PERSISTENT" << EOF
 autoconnect=true
 permissions=
 
 [wifi]
 mode=infrastructure
 ssid=$ssid
-
 EOF
 
   # Add security settings based on detected type
+  log_message "Applying security settings for type: $security_type to $CONN_FILE_PATH_PERSISTENT"
   case "$security_type" in
-    "WPA2")
-      cat >> "$CONN_FILE" << EOF
+    "WPA2" | "WPA") # Combine WPA and WPA2 as they use similar config
+      cat >> "$CONN_FILE_PATH_PERSISTENT" << EOF
 [wifi-security]
 auth-alg=open
 key-mgmt=wpa-psk
 psk=$password
 EOF
-      ;;
-    "WPA")
-      cat >> "$CONN_FILE" << EOF
-[wifi-security]
-auth-alg=open
-key-mgmt=wpa-psk
-psk=$password
-EOF
+      log_message "Applied WPA/WPA2 PSK security settings for '$ssid'."
       ;;
     "WEP")
-      cat >> "$CONN_FILE" << EOF
+      cat >> "$CONN_FILE_PATH_PERSISTENT" << EOF
 [wifi-security]
 auth-alg=open
 key-mgmt=none
 wep-key0=$password
-wep-key-type=1
+wep-key-type=1 # 1 for Hex/ASCII key, 2 for passphrase
 EOF
+      log_message "Applied WEP security settings for '$ssid'."
       ;;
     "NONE")
-      # No security section needed
+      # No security section needed for open networks
+      log_message "Applied NONE (Open) security settings for '$ssid'."
       ;;
-    *)
-      # Default to WPA/WPA2
-      cat >> "$CONN_FILE" << EOF
+    *) # Should not happen if detect_wifi_security defaults to WPA2
+      log_message "Warning: Unknown security type '$security_type' in case statement. Defaulting to WPA2-PSK for '$ssid'."
+      cat >> "$CONN_FILE_PATH_PERSISTENT" << EOF
 [wifi-security]
 auth-alg=open
 key-mgmt=wpa-psk
@@ -466,7 +504,7 @@ EOF
   esac
   
   # Add remaining settings
-  cat >> "$CONN_FILE" << EOF
+  cat >> "$CONN_FILE_PATH_PERSISTENT" << EOF
 
 [ipv4]
 method=auto
@@ -479,83 +517,84 @@ method=auto
 EOF
   
   # Set proper permissions for the connection file
-  echo "[DEBUG] Setting permissions for connection file"
-  chmod 600 "$CONN_FILE"
+  log_message "Setting permissions for connection file $CONN_FILE_PATH_PERSISTENT to 600..."
+  chmod 600 "$CONN_FILE_PATH_PERSISTENT"
   
   # Reload connections
-  echo "[DEBUG] Reloading NetworkManager connections"
-  nmcli connection reload
+  log_message "Reloading NetworkManager connections (nmcli connection reload)..."
+  nmcli connection reload || log_message "Warning: nmcli connection reload failed after creating persistent connection file."
   
-  echo "[DEBUG] Persistent WiFi connection created"
+  log_message "Persistent WiFi connection file for '$ssid' created at $CONN_FILE_PATH_PERSISTENT."
   return 0
 }
 
 # Function to verify WiFi connection
 verify_wifi_connection() {
   local ssid="$1"
-  echo "[DEBUG] Verifying WiFi connection to $ssid"
+  log_message "Verifying WiFi connection to SSID: $ssid"
   
   # Check if the connection is active
+  # Give it a few seconds to activate if it was just brought up
+  sleep 3
   if nmcli -t -f GENERAL.STATE connection show "$ssid" 2>/dev/null | grep -q "activated"; then
-    echo "[DEBUG] Connection to $ssid is active"
+    log_message "Connection to '$ssid' is active."
     
     # Check if we have internet connectivity
-    echo "[DEBUG] Testing internet connectivity"
+    log_message "Testing internet connectivity by pinging 8.8.8.8..."
     if ping -c 1 -W 5 8.8.8.8 >/dev/null 2>&1; then
-      echo "[DEBUG] Internet connectivity verified"
+      log_message "Internet connectivity verified for '$ssid'."
       return 0
     else
-      echo "[WARNING] Connected to $ssid but no internet connectivity"
+      log_message "Warning: Connected to '$ssid' but no internet connectivity (ping to 8.8.8.8 failed)."
       return 1
     fi
   else
-    echo "[WARNING] Connection to $ssid is not active"
+    log_message "Warning: Connection to '$ssid' is not active."
     return 1
   fi
 }
 
 # Configure WiFi
-echo "[DEBUG] Feature: WiFi Configuration"
-echo "[DEBUG] Checking WiFi configuration settings"
+log_message "Feature: WiFi Configuration"
+log_message "Checking WiFi configuration settings..."
 
 # Ensure required packages are installed
 ensure_wifi_packages || {
-  echo "[ERROR] Failed to ensure required WiFi packages. WiFi setup may not work properly."
+  log_message "Error: Failed to ensure required WiFi packages. WiFi setup may not work properly."
+  # Decide if this is fatal or a warning. For now, continue.
 }
 
 # Check if WiFi credentials are provided
-echo "[DEBUG] Checking if WiFi credentials are provided in environment file"
+log_message "Checking if WiFi credentials are provided in environment file (WIFI_SSID and WIFI_PASSWORD)..."
 if [ -z "$WIFI_SSID" ] || [ -z "$WIFI_PASSWORD" ]; then
-  echo "[DEBUG] WiFi credentials not provided in environment file, skipping WiFi setup"
+  log_message "WiFi credentials (WIFI_SSID or WIFI_PASSWORD) not provided in environment file. Skipping WiFi setup."
 else
-  echo "[DEBUG] WiFi credentials found, SSID: $WIFI_SSID"
-  # Print environment variables for debugging
-  echo "[DEBUG] WIFI_SSID=$WIFI_SSID"
-  # Don't print the actual password for security reasons
-  echo "[DEBUG] WIFI_PASSWORD=********"
+  log_message "WiFi credentials found. SSID: $WIFI_SSID" # Password is not logged for security
   
-  # Create a persistent WiFi connection first
-  echo "[DEBUG] Creating persistent WiFi connection"
+  # Create a persistent WiFi connection first (writes the .nmconnection file)
+  log_message "Creating/ensuring persistent WiFi connection file for '$WIFI_SSID'..."
   create_persistent_wifi_connection "$WIFI_SSID" "$WIFI_PASSWORD"
   
-  # Call the WiFi configuration function
-  echo "[DEBUG] Calling WiFi configuration function"
+  # Call the WiFi configuration function (attempts to bring up the connection)
+  log_message "Calling main WiFi configuration function for '$WIFI_SSID'..."
   configure_wifi "$WIFI_SSID" "$WIFI_PASSWORD"
   WIFI_CONFIG_STATUS=$?
-  echo "[DEBUG] WiFi configuration function completed with status: $WIFI_CONFIG_STATUS"
+  log_message "WiFi configuration function completed with status: $WIFI_CONFIG_STATUS for '$WIFI_SSID'."
   
   # Verify the connection if configuration was successful
   if [ $WIFI_CONFIG_STATUS -eq 0 ]; then
-    echo "[DEBUG] Verifying WiFi connection"
+    log_message "Verifying WiFi connection for '$WIFI_SSID' after configuration attempt..."
     verify_wifi_connection "$WIFI_SSID"
     VERIFY_STATUS=$?
     
     if [ $VERIFY_STATUS -eq 0 ]; then
-      echo "[DEBUG] WiFi connection successfully verified"
+      log_message "WiFi connection to '$WIFI_SSID' successfully verified."
     else
-      echo "[WARNING] WiFi connection verification failed. The system may still connect automatically later."
+      log_message "Warning: WiFi connection verification failed for '$WIFI_SSID'. The system may still connect automatically later if the persistent file is correct."
     fi
+  else
+    log_message "WiFi configuration function reported an error for '$WIFI_SSID'. Skipping verification."
   fi
 fi
 
-echo "[DEBUG] WiFi setup script completed"
+log_message "WiFi setup script (wifi.sh) completed."
