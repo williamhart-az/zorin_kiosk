@@ -50,6 +50,7 @@ KIOSK_USER_HOME="/home/$KIOSK_USERNAME"
 FLATPAK_APP_BASE_DIR="$KIOSK_USER_HOME/.var/app"
 FLATPAK_FIREFOX_PROFILE_DIR="$FLATPAK_APP_BASE_DIR/org.mozilla.firefox"
 STANDARD_FIREFOX_PROFILE_PARENT_DIR="$KIOSK_USER_HOME/.mozilla"
+SNAP_FIREFOX_PROFILE_PARENT_DIR="$KIOSK_USER_HOME/snap/firefox/common/.mozilla"
 
 echo "[INFO] Ensuring Firefox base directories are correctly permissioned for user $KIOSK_USERNAME..."
 
@@ -110,14 +111,27 @@ LOGFILE="\$LOG_DIR/firefox_profile_setup.log"
 mkdir -p "\$LOG_DIR"
 echo "\$(date): Setting up Firefox profile..." >> "\$LOGFILE"
 
+# Check if Firefox is installed
+if ! command -v firefox &> /dev/null; then
+  echo "\$(date): Firefox is not installed" >> "\$LOGFILE"
+  echo "Firefox is not installed. Please install Firefox and try again."
+  exit 1
+fi
+
 # Detect Firefox installation type
 FIREFOX_FLATPAK=false
+FIREFOX_SNAP=false
 
 # Check if Firefox is installed as flatpak
 if [ -d "/var/lib/flatpak/app/org.mozilla.firefox" ] || [ -d "/home/$KIOSK_USERNAME/.local/share/flatpak/app/org.mozilla.firefox" ]; then
   FIREFOX_FLATPAK=true
   PROFILE_BASE_DIR="/home/$KIOSK_USERNAME/.var/app/org.mozilla.firefox"
   echo "\$(date): Firefox flatpak detected" >> "\$LOGFILE"
+# Check if Firefox is installed as snap
+elif [ -d "$SNAP_FIREFOX_PROFILE_PARENT_DIR" ]; then
+  FIREFOX_SNAP=true
+  PROFILE_BASE_DIR="$SNAP_FIREFOX_PROFILE_PARENT_DIR"
+  echo "\$(date): Firefox snap detected" >> "\$LOGFILE"
 else
   PROFILE_BASE_DIR="/home/$KIOSK_USERNAME"
   echo "\$(date): Standard Firefox detected" >> "\$LOGFILE"
@@ -151,6 +165,25 @@ EOL
 if [ "\$FIREFOX_FLATPAK" = "true" ]; then
   mkdir -p "\$PROFILE_BASE_DIR/.var/app/org.mozilla.firefox/.mozilla/firefox"
   cat > "\$PROFILE_BASE_DIR/.var/app/org.mozilla.firefox/.mozilla/firefox/profiles.ini" << EOL
+[Profile0]
+Name=default
+IsRelative=1
+Path=$PROFILE_NAME
+Default=1
+
+[General]
+StartWithLastProfile=1
+Version=2
+
+[Install]
+DefaultProfile=$PROFILE_NAME
+EOL
+fi
+
+# If Firefox is installed as Snap, also create the profile.ini in the Snap location
+if [ "\$FIREFOX_SNAP" = "true" ]; then
+  mkdir -p "\$PROFILE_BASE_DIR/.mozilla/firefox"
+  cat > "\$PROFILE_BASE_DIR/.mozilla/firefox/profiles.ini" << EOL
 [Profile0]
 Name=default
 IsRelative=1
@@ -200,6 +233,9 @@ user_pref("toolkit.telemetry.reportingpolicy.firstRun", false);
 user_pref("datareporting.healthreport.uploadEnabled", false);
 user_pref("datareporting.policy.dataSubmissionEnabled", false);
 user_pref("datareporting.policy.firstRunTime", 0);
+
+// Suppress "What's New" page on updates
+user_pref("browser.rights.3.shown", true);
 
 // Privacy settings
 user_pref("privacy.sanitize.sanitizeOnShutdown", true);

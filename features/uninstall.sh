@@ -119,23 +119,23 @@ log_message "Stopping all kiosk-related services..." "INFO"
 # Firefox ownership fix service
 if systemctl is-active firefox-ownership-fix.service &>/dev/null; then
   log_message "Stopping firefox-ownership-fix.service" "DEBUG"
-  systemctl stop firefox-ownership-fix.service
+  systemctl stop firefox-ownership-fix.service || true
 fi
 
 # Firefox periodic fix service and timer
 if systemctl is-active firefox-periodic-fix.timer &>/dev/null; then
   log_message "Stopping firefox-periodic-fix.timer" "DEBUG"
-  systemctl stop firefox-periodic-fix.timer
+  systemctl stop firefox-periodic-fix.timer || true
 fi
 if systemctl is-active firefox-periodic-fix.service &>/dev/null; then
   log_message "Stopping firefox-periodic-fix.service" "DEBUG"
-  systemctl stop firefox-periodic-fix.service
+  systemctl stop firefox-periodic-fix.service || true
 fi
 
 # Var ownership fix service
 if systemctl is-active var-ownership-fix.service &>/dev/null; then
   log_message "Stopping var-ownership-fix.service" "DEBUG"
-  systemctl stop var-ownership-fix.service
+  systemctl stop var-ownership-fix.service || true
 fi
 
 # Now disable all services
@@ -246,6 +246,19 @@ if [ -d "$OPT_KIOSK_DIR" ]; then
   rm -rf "$OPT_KIOSK_DIR"
 fi
 
+# Ask if the .env file should be removed
+remove_env=$(get_user_input "[PROMPT] Do you want to remove the .env file? (y/n)")
+
+if [[ "$remove_env" =~ ^[Yy]$ ]]; then
+  log_message "Removing .env file..." "INFO"
+  if [ -f "$ENV_FILE" ]; then
+    log_message "Removing $ENV_FILE" "DEBUG"
+    rm -f "$ENV_FILE"
+  fi
+else
+  log_message "Keeping .env file." "INFO"
+fi
+
 # Check if any kiosk-related files or directories still exist
 remaining_issues=false
 
@@ -312,6 +325,10 @@ if [[ "$remove_user" =~ ^[Yy]$ ]]; then
     if grep -q "$KIOSK_USER_HOME" /etc/fstab; then
       log_message "Removing tmpfs entry from /etc/fstab" "DEBUG"
       sed -i "\#$KIOSK_USER_HOME#d" /etc/fstab
+      
+      # Unmount the tmpfs filesystem
+      log_message "Unmounting tmpfs filesystem" "DEBUG"
+      umount "$KIOSK_USER_HOME"
     fi
     
     # Remove the user and their home directory
@@ -373,6 +390,16 @@ echo "" >&2
 log_message "Uninstallation complete!" "INFO"
 log_message "You may need to reboot your system for all changes to take effect." "INFO"
 log_message "Recommended: sudo reboot" "INFO"
+
+# Ask if the user wants to reboot the system
+reboot_system=$(get_user_input "[PROMPT] Do you want to reboot the system now? (y/n)")
+
+if [[ "$reboot_system" =~ ^[Yy]$ ]]; then
+  log_message "Rebooting system..." "INFO"
+  sudo reboot
+else
+  log_message "System reboot skipped." "INFO"
+fi
 
 # Check if we were called from setup.sh (with 'enable' parameter)
 if [[ " $* " == *" enable "* ]]; then
