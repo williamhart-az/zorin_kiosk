@@ -102,7 +102,13 @@ cat > "$INIT_SCRIPT" << EOF
 # Script to initialize kiosk environment on login
 
 # Log initialization
-LOGFILE="/tmp/kiosk_init.log"
+LOGFILE="$OPT_KIOSK_DIR/kiosk_debug.log"
+
+# Ensure the log directory exists and has correct permissions
+mkdir -p "$OPT_KIOSK_DIR"
+chown $KIOSK_USERNAME:$KIOSK_USERNAME "$OPT_KIOSK_DIR"
+chmod 755 "$OPT_KIOSK_DIR"
+
 echo "\$(date): [DEBUG] Initializing kiosk environment..." >> "\$LOGFILE"
 
 # Create necessary directories if they don't exist
@@ -121,7 +127,7 @@ echo "\$(date): [DEBUG] Using template directory: \$TEMPLATE_DIR" >> "\$LOGFILE"
 
 # Run Firefox profile setup script
 echo "\$(date): [DEBUG] Running Firefox profile setup script" >> "\$LOGFILE"
-sudo $OPT_KIOSK_DIR/setup_firefox_profile.sh
+sudo $OPT_KIOSK_DIR/setup_firefox_profile.sh >> "\$LOGFILE" 2>&1
 echo "\$(date): [DEBUG] Firefox profile setup completed" >> "\$LOGFILE"
 
 # Copy desktop shortcuts if they exist
@@ -147,7 +153,7 @@ fi
 
 # Set wallpaper
 echo "\$(date): [DEBUG] Setting wallpaper" >> "\$LOGFILE"
-$OPT_KIOSK_DIR/set_wallpaper.sh
+$OPT_KIOSK_DIR/set_wallpaper.sh >> "\$LOGFILE" 2>&1
 echo "\$(date): [DEBUG] Wallpaper set" >> "\$LOGFILE"
 
 echo "\$(date): [DEBUG] Kiosk environment initialized successfully." >> "\$LOGFILE"
@@ -189,8 +195,8 @@ if [ ! -f "$OPT_KIOSK_DIR/disable_screensaver.sh" ]; then
 # This script uses multiple methods to ensure screen blanking is disabled
 
 # Log file for debugging
-LOGFILE="/tmp/disable_screensaver.log"
-echo "$(date): Starting screen blanking prevention script" > "$LOGFILE"
+LOGFILE="/opt/kiosk/kiosk_debug.log"
+echo "$(date): Starting screen blanking prevention script" >> "$LOGFILE"
 
 # Function to safely run xset commands with error handling
 safe_xset() {
@@ -348,7 +354,7 @@ else
     echo "$(date): dconf command not found" >> "$LOGFILE"
 fi
 
-# Method 4: Create a systemd inhibitor to prevent screen blanking
+# Method 4: Use a systemd inhibitor to prevent screen blanking
 if command -v systemd-inhibit &> /dev/null; then
     echo "$(date): Using systemd-inhibit to prevent screen blanking" >> "$LOGFILE"
     # Run a small sleep command that will keep the inhibitor active
@@ -624,13 +630,8 @@ if [ -d "/etc/gdm3" ] || [[ "$DM_SERVICE" == *"gdm"* ]] || [[ "$RUNNING_DM" == "
     fi
     echo "[DEBUG] GDM configuration updated"
   else
-    echo "[DEBUG] No existing GDM configuration found, creating new one"
-    cat > /etc/gdm3/custom.conf << EOF
-[daemon]
-AutomaticLoginEnable=true
-AutomaticLogin=$KIOSK_USERNAME
-EOF
-    echo "[DEBUG] New GDM configuration created"
+    echo "Creating GDM auto-login configuration file..."
+    echo -e "[daemon]\nAutomaticLoginEnable=true\nAutomaticLogin=$KIOSK_USERNAME" > /etc/gdm3/custom.conf
   fi
   echo "[DEBUG] GDM autologin configuration completed"
   
@@ -961,7 +962,7 @@ if [ -d "/etc/lightdm" ]; then
     if ! grep -q "autologin-user=$KIOSK_USER" /etc/lightdm/lightdm.conf; then
       echo "Fixing LightDM auto-login configuration..."
       if grep -q "\[Seat:\*\]" /etc/lightdm/lightdm.conf; then
-        sed -i '/^\[Seat:\*\]/a autologin-user='$KIOSK_USER'\nautologin-user-timeout=0' /etc/lightdm/lightdm.conf
+        sed -i '/^\[Seat:\*\]/a autologin-user='$KIOSK_USERNAME'\nautologin-user-timeout=0' /etc/lightdm/lightdm.conf
       else
         echo -e "[Seat:*]\nautologin-user=$KIOSK_USER\nautologin-user-timeout=0" >> /etc/lightdm/lightdm.conf
       fi
@@ -1025,3 +1026,30 @@ EOF
 systemctl enable verify-autologin.service
 
 echo "[DEBUG] User setup script completed successfully"
+
+</file_content>
+
+Now that you have the latest state of the file, try the operation again with fewer, more precise SEARCH blocks. For large files especially, it may be prudent to try to limit yourself to <5 SEARCH/REPLACE blocks at a time, then wait for the user to respond with the result of the operation before following up with another replace_in_file call to make additional edits.
+(If you run into this error 3 times in a row, you may use the write_to_file tool as a fallback.)
+</error><environment_details>
+# VSCode Visible Files
+features/user_setup.sh
+
+# VSCode Open Tabs
+features/firefox.sh
+setup.sh
+features/user_setup.sh
+features/uninstall.sh
+
+# Actively Running Terminals
+## Original command: `Remove-Item features/var_ownership_fix.sh`
+
+# Current Time
+5/20/2025, 3:09:17 PM (America/Phoenix, UTC-7:00)
+
+# Context Window Usage
+259,218 / 1,048.576K tokens used (25%)
+
+# Current Mode
+ACT MODE
+</environment_details>

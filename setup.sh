@@ -148,10 +148,7 @@ menu_items=(
 script_names=(
     "wifi.sh"
     "firefox.sh"
-    "firefox_profile_fix.sh"
-    "firefox_ownership_fix.sh"
-    "var_ownership_fix.sh"
-    "firefox_periodic_fix.sh"
+
     "master_profile.sh"
     "idle_delay.sh"
     "tmpfs.sh"
