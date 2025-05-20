@@ -1,9 +1,0 @@
-Tue May 20 04:25:23 PM MST 2025 - kiosk-home-init.service: Starting initialization for kiosk...
-cp: cannot stat '/opt/kiosk/templates/Desktop/*': No such file or directory
-Tue May 20 04:25:23 PM MST 2025 - kiosk-home-init.service: No Desktop entries to copy or error.
-cp: cannot stat '/opt/kiosk/templates/Documents/*': No such file or directory
-Tue May 20 04:25:23 PM MST 2025 - kiosk-home-init.service: No Documents to copy or error.
-Tue May 20 04:25:23 PM MST 2025 - kiosk-home-init.service: Running setup_firefox_profile.sh...
-Firefox is not installed. Please install Firefox and try again.
-Tue May 20 04:25:24 PM MST 2025 - kiosk-home-init.service: Failed to enable kiosk-idle-delay.service for user.
-Tue May 20 04:25:24 PM MST 2025 - kiosk-home-init.service: Initialization complete for kiosk.
