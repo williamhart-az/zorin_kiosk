@@ -132,11 +132,7 @@ ensure_script_permissions
 menu_items=(
     "Setup WiFi"
     "Create Firefox Profile Sync"
-    "Fix Firefox Profile.ini"
-    "Fix Firefox Ownership"
-    "Fix ~/var Ownership"
-    "Periodic Firefox Fix"
-    "Clone Admin Profile" 
+    "Clone Admin Profile"
     "Never Sleep Screen"   
     "Use Temporary File System"
     "Reboot Interval"
