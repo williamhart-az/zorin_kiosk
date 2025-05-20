@@ -44,6 +44,22 @@ log_message() {
 # Function to run a command with logging
 run_with_logging() {
   local cmd="$1"
+}
+
+echo "=== ZorinOS Kiosk Setup ==="
+echo "This script will configure your system for kiosk mode with desktop access."
+echo "WARNING: This is meant for dedicated kiosk systems only!"
+echo ""
+read -p "Continue? (y/n): " -n 1 -r
+echo ""
+if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+  log_message "Setup cancelled by user" "INFO"
+  echo "Setup cancelled."
+  exit 1
+fi
+
+run_with_logging() {
+  local cmd="$1"
   local feature_name="$2"
   local script_name="$3"
   
@@ -220,8 +236,8 @@ toggle_state() {
             states[$selected]=1
             
             # If uninstall is being turned ON, turn all other features OFF
-            if [ $selected -eq 10 ]; then  # Uninstall is at index 10
-                for i in $(seq 0 9); do
+            if [ $selected -eq 6 ]; then  # Uninstall is at index 6
+                for i in $(seq 0 5); do # Indices 0 to 5 are the features before uninstall
                     states[$i]=0
                 done
             fi
@@ -289,7 +305,7 @@ run_all_on() {
     
     # Check if uninstall is ON
     local uninstall_on=0
-    if [ ${states[10]} -eq 1 ]; then  # Uninstall is at index 10
+    if [ ${states[6]} -eq 1 ]; then  # Uninstall is at index 6
         uninstall_on=1
         echo "- Uninstall Kiosk Setup"
     else
@@ -299,7 +315,7 @@ run_all_on() {
     local has_on=0
     for i in $(seq 0 $((feature_count-1))); do  # Check all features
         # Skip uninstall in this loop as we've already handled it
-        if [ $i -eq 10 ]; then
+        if [ $i -eq 6 ]; then
             continue
         fi
         
