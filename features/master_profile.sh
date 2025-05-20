@@ -31,104 +31,44 @@ enable_feature() {
     mkdir -p "$DEST_PROFILE_DIR"
 
     # 1. First, identify the default profile from profiles.ini
+    # The following logic attempts to clone a Firefox profile from $HOME/.mozilla/firefox (typically /root/.mozilla/firefox).
+    # This has been identified as a point of failure if the root profile doesn't exist or is not the intended source.
+    # Commenting out the problematic parts to prevent premature script exit.
+    # The primary mechanism for Firefox profile setup should be the save_admin_changes and init_kiosk.sh/kiosk-home-init.service flow.
+
+    log_message "enable_feature: Checking for source profile at $SOURCE_PROFILES_INI (typically /root/.mozilla/firefox/profiles.ini)"
     if [ -f "$SOURCE_PROFILES_INI" ]; then
-        log_message "Source profiles.ini found at $SOURCE_PROFILES_INI."
-        # Extract the default profile path
-        DEFAULT_PROFILE=$(grep -A 10 "Default=1" "$SOURCE_PROFILES_INI" | grep "Path=" | head -1 | cut -d= -f2)
-        log_message "Attempted to find Default=1 profile. Result: $DEFAULT_PROFILE"
+        log_message "Source profiles.ini found at $SOURCE_PROFILES_INI. Original script would attempt to clone this."
+        # DEFAULT_PROFILE=$(grep -A 10 "Default=1" "$SOURCE_PROFILES_INI" | grep "Path=" | head -1 | cut -d= -f2)
+        # log_message "Attempted to find Default=1 profile. Result: $DEFAULT_PROFILE"
 
-        if [ -z "$DEFAULT_PROFILE" ]; then
-            log_message "No Default=1 profile found. Trying to get the first profile listed."
-            # If no default profile found, try to get the first profile
-            DEFAULT_PROFILE=$(grep "Path=" "$SOURCE_PROFILES_INI" | head -1 | cut -d= -f2)
-            log_message "First profile found: $DEFAULT_PROFILE"
-        fi
+        # if [ -z "$DEFAULT_PROFILE" ]; then
+        #     log_message "No Default=1 profile found. Trying to get the first profile listed."
+        #     DEFAULT_PROFILE=$(grep "Path=" "$SOURCE_PROFILES_INI" | head -1 | cut -d= -f2)
+        #     log_message "First profile found: $DEFAULT_PROFILE"
+        # fi
 
-        if [ -n "$DEFAULT_PROFILE" ]; then
-            SOURCE_PROFILE_PATH="$SOURCE_PROFILE_DIR/$DEFAULT_PROFILE"
-            log_message "Identified source profile path: $SOURCE_PROFILE_PATH"
-
-            # 2. Create a new profile for kiosk
-            KIOSK_PROFILE_NAME="kiosk.default"
-            KIOSK_PROFILE_PATH="$DEST_PROFILE_DIR/$KIOSK_PROFILE_NAME"
-            log_message "Kiosk profile name: $KIOSK_PROFILE_NAME"
-            log_message "Kiosk profile path: $KIOSK_PROFILE_PATH"
-
-            # Create the profile directory
-            log_message "Creating kiosk profile directory: $KIOSK_PROFILE_PATH"
-            mkdir -p "$KIOSK_PROFILE_PATH"
-
-            # 3. Copy profile contents
-            log_message "Copying profile contents from $SOURCE_PROFILE_PATH to $KIOSK_PROFILE_PATH..."
-            cp -r "$SOURCE_PROFILE_PATH"/* "$KIOSK_PROFILE_PATH/"
-            log_message "Profile contents copied."
-
-            # 4. Create/update profiles.ini for kiosk user with modern format
-            log_message "Creating/updating profiles.ini for kiosk user at $DEST_PROFILE_DIR/profiles.ini"
-            cat > "$DEST_PROFILE_DIR/profiles.ini" << EOF
-[Profile0]
-Name=default
-IsRelative=1
-Path=$KIOSK_PROFILE_NAME
-Default=1
-
-[General]
-StartWithLastProfile=1
-Version=2
-
-[Install]
-DefaultProfile=$KIOSK_PROFILE_NAME
-EOF
-            log_message "Kiosk profiles.ini created."
-
-            # Also create profiles.ini in Flatpak location if needed
-            FLATPAK_FIREFOX_DIR="$KIOSK_HOME/.var/app/org.mozilla.firefox"
-            if [ -d "$FLATPAK_FIREFOX_DIR" ]; then
-                log_message "Flatpak Firefox directory found at $FLATPAK_FIREFOX_DIR. Creating profiles.ini there as well."
-                mkdir -p "$FLATPAK_FIREFOX_DIR/.mozilla/firefox"
-                cat > "$FLATPAK_FIREFOX_DIR/.mozilla/firefox/profiles.ini" << EOF
-[Profile0]
-Name=default
-IsRelative=1
-Path=$KIOSK_PROFILE_NAME
-Default=1
-
-[General]
-StartWithLastProfile=1
-Version=2
-
-[Install]
-DefaultProfile=$KIOSK_PROFILE_NAME
-EOF
-                log_message "Flatpak profiles.ini created."
-            else
-                log_message "Flatpak Firefox directory not found at $FLATPAK_FIREFOX_DIR."
-            fi
-
-            # 5. Ensure user.js is in the profile directory
-            USER_JS_PATH="/opt/kiosk/user.js"
-            if [ -f "$USER_JS_PATH" ]; then
-                log_message "Copying user.js from $USER_JS_PATH to $KIOSK_PROFILE_PATH/user.js..."
-                cp "$USER_JS_PATH" "$KIOSK_PROFILE_PATH/user.js"
-                log_message "user.js copied."
-            else
-                log_message "Warning: user.js not found in $USER_JS_PATH."
-            fi
-
-            # 6. Set proper ownership
-            log_message "Setting ownership of $KIOSK_HOME/.mozilla to kiosk:kiosk..."
-            chown -R kiosk:kiosk "$KIOSK_HOME/.mozilla" # Ensure KIOSK_USER variable is set or use static user
-            log_message "Ownership set."
-
-            log_message "Firefox profile successfully cloned for kiosk user."
-        else
-            log_message "Error: Could not find a Firefox profile to clone. DEFAULT_PROFILE was empty."
-            exit 1
-        fi
+        # if [ -n "$DEFAULT_PROFILE" ]; then
+            # SOURCE_PROFILE_PATH="$SOURCE_PROFILE_DIR/$DEFAULT_PROFILE"
+            # log_message "Identified source profile path: $SOURCE_PROFILE_PATH"
+            # log_message "Original script would copy profile contents from $SOURCE_PROFILE_PATH to $DEST_PROFILE_DIR/kiosk.default"
+            # log_message "This step is now SKIPPED in enable_feature to rely on template mechanism via save_admin_changes."
+            # KIOSK_PROFILE_NAME="kiosk.default"
+            # KIOSK_PROFILE_PATH="$DEST_PROFILE_DIR/$KIOSK_PROFILE_NAME"
+            # mkdir -p "$KIOSK_PROFILE_PATH"
+            # cp -r "$SOURCE_PROFILE_PATH"/* "$KIOSK_PROFILE_PATH/"
+            # cat > "$DEST_PROFILE_DIR/profiles.ini" << EOF ... (omitted for brevity)
+            # chown -R kiosk:kiosk "$KIOSK_HOME/.mozilla"
+            # log_message "Firefox profile successfully cloned for kiosk user."
+        # else
+            # log_message "Error: Could not find a Firefox profile to clone from $SOURCE_PROFILE_DIR. DEFAULT_PROFILE was empty. (Original script would exit)"
+            log_message "Warning: Could not find a default Firefox profile to clone from $SOURCE_PROFILE_DIR. This step in enable_feature will be skipped."
+        # fi
     else
-        log_message "Error: Source profiles.ini not found at $SOURCE_PROFILES_INI."
-        exit 1
+        # log_message "Error: Source profiles.ini not found at $SOURCE_PROFILES_INI. (Original script would exit)"
+        log_message "Warning: Source profiles.ini not found at $SOURCE_PROFILES_INI. Cloning from root profile in enable_feature will be skipped."
     fi
+    log_message "enable_feature: Finished (potentially problematic Firefox clone from root profile step has been modified/skipped)."
 }
 
 disable_feature() {
@@ -432,8 +372,24 @@ create_kiosk_init_service() {
   EXEC_START_CMD+="    mkdir -p /home/$KIOSK_USERNAME/.var/app/org.mozilla.firefox >> $KIOSK_INIT_SERVICE_LOG 2>> $KIOSK_INIT_SERVICE_ERR; "
   EXEC_START_CMD+="  fi; "
   EXEC_START_CMD+="fi && "
+  # Copy systemd user services
+  EXEC_START_CMD+="echo \\\"\$(date '+%Y-%m-%d %H:%M:%S') - Copying systemd user services...\\\" >> $KIOSK_INIT_SERVICE_LOG 2>> $KIOSK_INIT_SERVICE_ERR && "
+  EXEC_START_CMD+="mkdir -p /home/$KIOSK_USERNAME/.config/systemd/user >> $KIOSK_INIT_SERVICE_LOG 2>> $KIOSK_INIT_SERVICE_ERR && "
+  EXEC_START_CMD+="if [ -d '$TEMPLATE_DIR/.config/systemd/user' ]; then "
+  EXEC_START_CMD+="  cp -r $TEMPLATE_DIR/.config/systemd/user/* /home/$KIOSK_USERNAME/.config/systemd/user/ >> $KIOSK_INIT_SERVICE_LOG 2>> $KIOSK_INIT_SERVICE_ERR || echo \\\"\$(date '+%Y-%m-%d %H:%M:%S') - No systemd user services to copy or error during copy.\\\" >> $KIOSK_INIT_SERVICE_LOG; "
+  EXEC_START_CMD+="fi && "
+  # Set ownership for all copied files
   EXEC_START_CMD+="echo \\\"\$(date '+%Y-%m-%d %H:%M:%S') - Setting ownership for /home/$KIOSK_USERNAME...\\\" >> $KIOSK_INIT_SERVICE_LOG 2>> $KIOSK_INIT_SERVICE_ERR && "
   EXEC_START_CMD+="chown -R $KIOSK_USERNAME:$KIOSK_USERNAME /home/$KIOSK_USERNAME/ >> $KIOSK_INIT_SERVICE_LOG 2>> $KIOSK_INIT_SERVICE_ERR && "
+  # Enable kiosk-idle-delay.service for the user (requires linger to be enabled for the user)
+  # Ensure KioskUID is available or fetched if needed. For system service, it might need to get UID.
+  # For simplicity, assuming KIOSK_USERNAME is known and its UID can be found by systemctl.
+  # This command is run by root, so it needs to specify the user.
+  EXEC_START_CMD+="if [ -f \"/home/$KIOSK_USERNAME/.config/systemd/user/kiosk-idle-delay.service\" ]; then "
+  EXEC_START_CMD+="  echo \\\"\$(date '+%Y-%m-%d %H:%M:%S') - Enabling kiosk-idle-delay.service for user $KIOSK_USERNAME...\\\" >> $KIOSK_INIT_SERVICE_LOG 2>> $KIOSK_INIT_SERVICE_ERR && "
+  EXEC_START_CMD+="  loginctl enable-linger $KIOSK_USERNAME >> $KIOSK_INIT_SERVICE_LOG 2>> $KIOSK_INIT_SERVICE_ERR && " # Ensure linger is enabled
+  EXEC_START_CMD+="  XDG_RUNTIME_DIR=/run/user/\$(id -u $KIOSK_USERNAME) systemctl --user --machine=$KIOSK_USERNAME@.host --now enable kiosk-idle-delay.service >> $KIOSK_INIT_SERVICE_LOG 2>> $KIOSK_INIT_SERVICE_ERR || echo \\\"\$(date '+%Y-%m-%d %H:%M:%S') - Failed to enable kiosk-idle-delay.service for user $KIOSK_USERNAME.\\\" >> $KIOSK_INIT_SERVICE_LOG; "
+  EXEC_START_CMD+="fi && "
   EXEC_START_CMD+="echo \\\"\$(date '+%Y-%m-%d %H:%M:%S') - Kiosk home initialization complete.\\\" >> $KIOSK_INIT_SERVICE_LOG 2>> $KIOSK_INIT_SERVICE_ERR"
   EXEC_START_CMD+="\""
 
@@ -553,6 +509,25 @@ fi
 if [ -d "\$LOCAL_TEMPLATE_DIR/.config/autostart" ]; then
   log_kiosk_init_message "Copying autostart entries from \$LOCAL_TEMPLATE_DIR/.config/autostart/ to ~/.config/autostart/..."
   cp -r "\$LOCAL_TEMPLATE_DIR/.config/autostart/"* ~/.config/autostart/ 2>/dev/null || log_kiosk_init_message "No autostart entries to copy or error during copy."
+fi
+
+# Copy systemd user services if they exist
+if [ -d "\$LOCAL_TEMPLATE_DIR/.config/systemd/user" ]; then
+  log_kiosk_init_message "Copying systemd user services from \$LOCAL_TEMPLATE_DIR/.config/systemd/user/ to ~/.config/systemd/user/..."
+  mkdir -p ~/.config/systemd/user
+  cp -r "\$LOCAL_TEMPLATE_DIR/.config/systemd/user/"* ~/.config/systemd/user/ 2>/dev/null || log_kiosk_init_message "No systemd user services to copy or error during copy."
+  
+  # Attempt to enable kiosk-idle-delay.service if it was copied
+  if [ -f ~/.config/systemd/user/kiosk-idle-delay.service ]; then
+    log_kiosk_init_message "Attempting to enable kiosk-idle-delay.service for user \$(whoami)..."
+    # Ensure the DBUS_SESSION_BUS_ADDRESS is available for systemctl --user
+    if [ -z "\$DBUS_SESSION_BUS_ADDRESS" ]; then
+        export DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/\$(id -u)/bus"
+        log_kiosk_init_message "DBUS_SESSION_BUS_ADDRESS was not set. Exported to: \$DBUS_SESSION_BUS_ADDRESS"
+    fi
+    systemctl --user enable kiosk-idle-delay.service >> "\$LOGFILE" 2>&1 || log_kiosk_init_message "Failed to enable kiosk-idle-delay.service."
+    systemctl --user start kiosk-idle-delay.service >> "\$LOGFILE" 2>&1 || log_kiosk_init_message "Failed to start kiosk-idle-delay.service."
+  fi
 fi
 
 log_kiosk_init_message "Kiosk environment initialized successfully."

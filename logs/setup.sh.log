@@ -1,0 +1,136 @@
+=== Kiosk Setup Log Tue May 20 04:21:39 PM MST 2025 ===
+Command: ./setup.sh 
+----------------------------------------
+[INFO] 2025-05-20 16:21:39 - ZorinOS Kiosk Setup script started.
+[INFO] 2025-05-20 16:21:41 - Checking and setting execution permissions for all scripts
+[DEBUG] 2025-05-20 16:21:41 - Set execution permission for kiosk_setup.sh
+[DEBUG] 2025-05-20 16:21:41 - Setting execution permissions for all scripts in features directory
+[INFO] 2025-05-20 16:21:41 - All scripts now have proper execution permissions
+[INFO] 2025-05-20 16:21:46 - Running required user setup
+[INFO] 2025-05-20 16:21:46 - Installing User Setup (using user_setup.sh)
+----------------------------------------
+Running: features/user_setup.sh enable
+----------------------------------------
+Adding user `kiosk' ...
+Adding new group `kiosk' (1001) ...
+Adding new user `kiosk' (1001) with group `kiosk' ...
+adduser: Warning: The home directory `/home/kiosk' does not belong to the user you are currently creating.
+The home directory `/home/kiosk' already exists.  Not copying from `/etc/skel'.
+BAD PASSWORD: The password contains the user name in some form
+The unit files have no installation config (WantedBy=, RequiredBy=, Also=,
+Alias= settings in the [Install] section, and DefaultInstance= for template
+units). This means they are not meant to be enabled using systemctl.
+ 
+Possible reasons for having this kind of units are:
+• A unit may be statically enabled by being symlinked from another unit's
+  .wants/ or .requires/ directory.
+• A unit's purpose may be to act as a helper for some other unit which has
+  a requirement dependency on it.
+• A unit may be started when needed via activation (socket, path, timer,
+  D-Bus, udev, scripted systemctl call, ...).
+• In case of template units, the unit is meant to be enabled with some
+  instance name specified.
+/tmp/dconf_autologin_kiosk.sh: line 6: /var/log/kiosk/dconf_autologin_script.log: Permission denied
+/tmp/dconf_autologin_kiosk.sh: line 6: /var/log/kiosk/dconf_autologin_script.log: Permission denied
+/tmp/dconf_autologin_kiosk.sh: line 6: /var/log/kiosk/dconf_autologin_script.log: Permission denied
+/tmp/dconf_autologin_kiosk.sh: line 6: /var/log/kiosk/dconf_autologin_script.log: Permission denied
+
+(dconf:13165): dconf-CRITICAL **: 16:21:46.960: unable to create directory '/run/user/dconf': Permission denied.  dconf will not work properly.
+/tmp/dconf_autologin_kiosk.sh: line 6: /var/log/kiosk/dconf_autologin_script.log: Permission denied
+/tmp/dconf_autologin_kiosk.sh: line 6: /var/log/kiosk/dconf_autologin_script.log: Permission denied
+/tmp/dconf_autologin_kiosk.sh: line 6: /var/log/kiosk/dconf_autologin_script.log: Permission denied
+
+(dconf:13180): dconf-CRITICAL **: 16:21:46.994: unable to create directory '/run/user/dconf': Permission denied.  dconf will not work properly.
+/tmp/dconf_autologin_kiosk.sh: line 6: /var/log/kiosk/dconf_autologin_script.log: Permission denied
+/tmp/dconf_autologin_kiosk.sh: line 6: /var/log/kiosk/dconf_autologin_script.log: Permission denied
+/tmp/dconf_autologin_kiosk.sh: line 6: /var/log/kiosk/dconf_autologin_script.log: Permission denied
+
+(dconf:13195): dconf-CRITICAL **: 16:21:47.009: unable to create directory '/run/user/dconf': Permission denied.  dconf will not work properly.
+/tmp/dconf_autologin_kiosk.sh: line 6: /var/log/kiosk/dconf_autologin_script.log: Permission denied
+/tmp/dconf_autologin_kiosk.sh: line 6: /var/log/kiosk/dconf_autologin_script.log: Permission denied
+/tmp/dconf_autologin_kiosk.sh: line 6: /var/log/kiosk/dconf_autologin_script.log: Permission denied
+
+(dconf:13209): dconf-CRITICAL **: 16:21:47.022: unable to create directory '/run/user/dconf': Permission denied.  dconf will not work properly.
+/tmp/dconf_autologin_kiosk.sh: line 6: /var/log/kiosk/dconf_autologin_script.log: Permission denied
+/tmp/dconf_autologin_kiosk.sh: line 6: /var/log/kiosk/dconf_autologin_script.log: Permission denied
+/tmp/dconf_autologin_kiosk.sh: line 6: /var/log/kiosk/dconf_autologin_script.log: Permission denied
+
+(dconf:13220): dconf-CRITICAL **: 16:21:47.036: unable to create directory '/run/user/dconf': Permission denied.  dconf will not work properly.
+/tmp/dconf_autologin_kiosk.sh: line 6: /var/log/kiosk/dconf_autologin_script.log: Permission denied
+/tmp/dconf_autologin_kiosk.sh: line 6: /var/log/kiosk/dconf_autologin_script.log: Permission denied
+/tmp/dconf_autologin_kiosk.sh: line 6: /var/log/kiosk/dconf_autologin_script.log: Permission denied
+
+(dconf:13231): dconf-CRITICAL **: 16:21:47.050: unable to create directory '/run/user/dconf': Permission denied.  dconf will not work properly.
+/tmp/dconf_autologin_kiosk.sh: line 6: /var/log/kiosk/dconf_autologin_script.log: Permission denied
+/tmp/dconf_autologin_kiosk.sh: line 6: /var/log/kiosk/dconf_autologin_script.log: Permission denied
+Created symlink /home/kiosk/.config/systemd/user/default.target.wants/kiosk-autologin.service → /home/kiosk/.config/systemd/user/kiosk-autologin.service.
+features/user_setup.sh: line 1147: syntax error near unexpected token `newline'
+----------------------------------------
+[DEBUG] 2025-05-20 16:21:47 - Command completed with status: 2
+[DEBUG] 2025-05-20 16:21:47 - Executing additional features...
+[INFO] 2025-05-20 16:21:47 - Installing Setup WiFi (using wifi.sh)
+----------------------------------------
+Running: features/wifi.sh enable
+----------------------------------------
+
+WARNING: apt does not have a stable CLI interface. Use with caution in scripts.
+
+Hit:1 http://us.archive.ubuntu.com/ubuntu jammy InRelease
+Hit:2 http://security.ubuntu.com/ubuntu jammy-security InRelease
+Hit:3 http://archive.ubuntu.com/ubuntu jammy InRelease
+Hit:4 https://packages.zorinos.com/stable jammy InRelease
+Hit:5 https://packages.zorinos.com/patches jammy InRelease
+Hit:6 http://us.archive.ubuntu.com/ubuntu jammy-updates InRelease
+Hit:7 https://packages.zorinos.com/apps jammy InRelease
+Hit:8 https://packages.zorinos.com/drivers jammy InRelease
+Hit:9 http://us.archive.ubuntu.com/ubuntu jammy-backports InRelease
+Hit:10 https://ppa.launchpadcontent.net/zorinos/apps/ubuntu jammy InRelease
+Hit:11 https://ppa.launchpadcontent.net/zorinos/drivers/ubuntu jammy InRelease
+Hit:12 https://ppa.launchpadcontent.net/zorinos/patches/ubuntu jammy InRelease
+Hit:13 https://ppa.launchpadcontent.net/zorinos/stable/ubuntu jammy InRelease
+Reading package lists...
+Building dependency tree...
+Reading state information...
+405 packages can be upgraded. Run 'apt list --upgradable' to see them.
+Connection 'LAT-Staff' (39507f6a-0a20-4bee-bde6-5668f043a1d5) successfully deleted.
+Connection successfully activated (D-Bus active path: /org/freedesktop/NetworkManager/ActiveConnection/4)
+----------------------------------------
+[DEBUG] 2025-05-20 16:22:01 - Command completed with status: 0
+[INFO] 2025-05-20 16:22:02 - Installing Create Firefox Profile Sync (using firefox.sh)
+----------------------------------------
+Running: features/firefox.sh enable
+----------------------------------------
+touch: missing file operand
+Try 'touch --help' for more information.
+----------------------------------------
+[DEBUG] 2025-05-20 16:22:02 - Command completed with status: 0
+[INFO] 2025-05-20 16:22:03 - Installing Clone Admin Profile (using master_profile.sh)
+----------------------------------------
+Running: features/master_profile.sh enable
+----------------------------------------
+----------------------------------------
+[DEBUG] 2025-05-20 16:22:03 - Command completed with status: 1
+[INFO] 2025-05-20 16:22:04 - Installing Never Sleep Screen (using idle_delay.sh)
+----------------------------------------
+Running: features/idle_delay.sh enable
+----------------------------------------
+----------------------------------------
+[DEBUG] 2025-05-20 16:22:05 - Command completed with status: 0
+[INFO] 2025-05-20 16:22:06 - Installing Use Temporary File System (using tmpfs.sh)
+----------------------------------------
+Running: features/tmpfs.sh enable
+----------------------------------------
+umount: /home/kiosk: target is busy.
+Created symlink /etc/systemd/system/multi-user.target.wants/kiosk-home-init.service → /etc/systemd/system/kiosk-home-init.service.
+features/tmpfs.sh: line 673: : No such file or directory
+----------------------------------------
+[DEBUG] 2025-05-20 16:22:06 - Command completed with status: 1
+[INFO] 2025-05-20 16:22:07 - Installing Reboot Interval (using scheduled_reboot.sh)
+----------------------------------------
+Running: features/scheduled_reboot.sh enable
+----------------------------------------
+Scheduled reboot configured for 03:00
+System will reboot daily at 03:00
+----------------------------------------
+[DEBUG] 2025-05-20 16:22:08 - Command completed with status: 0
+[DEBUG] 2025-05-20 16:22:09 - All features execution complete

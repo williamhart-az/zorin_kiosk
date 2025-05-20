@@ -1,0 +1,6 @@
+2025-05-20 16:25:24 - Starting verify-autologin.sh for user kiosk
+2025-05-20 16:25:24 - Verifying GDM configuration...
+2025-05-20 16:25:24 - GDM autologin already set in /etc/gdm3/custom.conf for kiosk.
+2025-05-20 16:25:24 - Using session zorin for AccountsService verification.
+2025-05-20 16:25:24 - AccountsService autologin already set in /var/lib/AccountsService/users/kiosk for kiosk.
+2025-05-20 16:25:24 - Auto-login verification completed for user kiosk.

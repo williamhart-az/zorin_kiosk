@@ -139,7 +139,9 @@ cat > "$FIREFOX_PROFILE_SCRIPT" << EOF
 # Script to set up Firefox profile for kiosk user
 set -e # Ensures the script will exit immediately if any command fails
 
-: \${KIOSK_USERNAME:="\$(whoami)"} # Default to current user if KIOSK_USERNAME is not set
+# KIOSK_USERNAME is expanded by the parent firefox.sh script from the .env file
+# This ensures the correct kiosk user is targeted, not 'root' if script is run via sudo.
+KIOSK_USERNAME_EFFECTIVE="$KIOSK_USERNAME"
 
 # Use the log directory defined by the parent script (firefox.sh)
 # This value will be hardcoded into this generated script.
@@ -158,65 +160,72 @@ log_setup_message() {
     echo "\$(date '+%Y-%m-%d %H:%M:%S') - \$1" >> "\$LOGFILE"
 }
 
-log_setup_message "Starting setup_firefox_profile.sh for user \$KIOSK_USERNAME..."
+log_setup_message "Starting setup_firefox_profile.sh for user \$KIOSK_USERNAME_EFFECTIVE..."
 
-KIOSK_USER_HOME_DIR="/home/\$KIOSK_USERNAME"
+KIOSK_USER_HOME_DIR="/home/\$KIOSK_USERNAME_EFFECTIVE"
 # SNAP_FIREFOX_PROFILE_PARENT_DIR_GENERATED is expanded by firefox.sh
 # It needs to be available inside the generated script.
 # We pass the value from the parent script.
-SNAP_FIREFOX_PROFILE_PARENT_DIR_IN_GENERATED_SCRIPT="$SNAP_FIREFOX_PROFILE_PARENT_DIR"
+SNAP_FIREFOX_PROFILE_PARENT_DIR_IN_GENERATED_SCRIPT="$SNAP_FIREFOX_PROFILE_PARENT_DIR" # This path is already user-specific
 
+FIREFOX_EXECUTABLE=""
+FIREFOX_INSTALL_TYPE="unknown" # standard, snap, flatpak
 
-# Check if Firefox is installed
-if ! command -v firefox &> /dev/null; then
-  log_setup_message "Error: Firefox is not installed."
-  echo "Firefox is not installed. Please install Firefox and try again." # User feedback
+# Check for standard Firefox installation
+if command -v firefox &> /dev/null; then
+  FIREFOX_EXECUTABLE="firefox"
+  FIREFOX_INSTALL_TYPE="standard"
+  log_setup_message "Standard Firefox detected via command -v firefox."
+# Check for Snap Firefox
+elif command -v /snap/bin/firefox &> /dev/null; then
+  FIREFOX_EXECUTABLE="/snap/bin/firefox"
+  FIREFOX_INSTALL_TYPE="snap"
+  log_setup_message "Snap Firefox detected at /snap/bin/firefox."
+# Check for Flatpak Firefox
+elif flatpak info org.mozilla.firefox &> /dev/null; then
+  # Flatpak apps are run via 'flatpak run'. The command itself isn't directly in PATH.
+  # We'll note it's Flatpak and handle profile path accordingly.
+  # Actual execution of Firefox isn't done by this script.
+  FIREFOX_INSTALL_TYPE="flatpak"
+  log_setup_message "Flatpak Firefox (org.mozilla.firefox) detected via flatpak info."
+else
+  log_setup_message "Error: Firefox does not appear to be installed or accessible via standard path, Snap, or Flatpak."
+  echo "Error: Firefox does not appear to be installed. Please install Firefox and try again." # User feedback
   exit 1
 fi
-log_setup_message "Firefox command found."
+log_setup_message "Firefox installation type: \$FIREFOX_INSTALL_TYPE"
 
-# Detect Firefox installation type
-FIREFOX_FLATPAK=false
-FIREFOX_SNAP=false
-
-# Check if Firefox is installed as flatpak
-# Using KIOSK_USER_HOME_DIR for paths inside the generated script
-if [ -d "/var/lib/flatpak/app/org.mozilla.firefox" ] || [ -d "\$KIOSK_USER_HOME_DIR/.local/share/flatpak/app/org.mozilla.firefox" ]; then
-  FIREFOX_FLATPAK=true
+# Determine PROFILE_BASE_DIR based on installation type
+if [ "\$FIREFOX_INSTALL_TYPE" = "flatpak" ]; then
   # For Flatpak, the profile is within .var/app relative to the user's home
   PROFILE_BASE_DIR="\$KIOSK_USER_HOME_DIR/.var/app/org.mozilla.firefox"
-  log_setup_message "Firefox Flatpak detected. Profile base: \$PROFILE_BASE_DIR"
-# Check if Firefox is installed as snap
-# Use the variable passed from the parent script for Snap profile path
-elif [ -d "\$SNAP_FIREFOX_PROFILE_PARENT_DIR_IN_GENERATED_SCRIPT" ]; then
-  FIREFOX_SNAP=true
-  PROFILE_BASE_DIR="\$SNAP_FIREFOX_PROFILE_PARENT_DIR_IN_GENERATED_SCRIPT"
-  log_setup_message "Firefox Snap detected. Profile base: \$PROFILE_BASE_DIR"
-else
-  # Standard (deb/rpm/tarball) installation, profile in ~/.mozilla
+  log_setup_message "Using Flatpak profile base: \$PROFILE_BASE_DIR"
+elif [ "\$FIREFOX_INSTALL_TYPE" = "snap" ]; then
+  # For Snap, the profile is within snap/firefox/common relative to user's home
+  # SNAP_FIREFOX_PROFILE_PARENT_DIR_IN_GENERATED_SCRIPT already points to /home/user/snap/firefox/common/.mozilla
+  # So PROFILE_BASE_DIR should be its parent: /home/user/snap/firefox/common
+  PROFILE_BASE_DIR="\$(dirname "\$SNAP_FIREFOX_PROFILE_PARENT_DIR_IN_GENERATED_SCRIPT")"
+  log_setup_message "Using Snap profile base: \$PROFILE_BASE_DIR"
+else # Standard
   PROFILE_BASE_DIR="\$KIOSK_USER_HOME_DIR" # .mozilla will be appended later
-  log_setup_message "Standard Firefox detected. Profile base (parent of .mozilla): \$PROFILE_BASE_DIR"
+  log_setup_message "Using Standard profile base (parent of .mozilla): \$PROFILE_BASE_DIR"
 fi
 
-# Ensure the base directory for profiles exists and has correct permissions
-# This is crucial if PROFILE_BASE_DIR is, for example, /home/kiosk/.var/app/org.mozilla.firefox
-# The parent directories like /home/kiosk/.var and /home/kiosk/.var/app should already be handled by firefox.sh
-# This script (setup_firefox_profile.sh) focuses on the .mozilla part within PROFILE_BASE_DIR
-mkdir -p "\$PROFILE_BASE_DIR/.mozilla/firefox"
-log_setup_message "Ensured profile directory structure exists: \$PROFILE_BASE_DIR/.mozilla/firefox"
+# Ensure the actual profile directory structure exists (e.g., $PROFILE_BASE_DIR/.mozilla/firefox)
+FIREFOX_PROFILE_ROOT="\$PROFILE_BASE_DIR/.mozilla/firefox"
+mkdir -p "\$FIREFOX_PROFILE_ROOT"
+log_setup_message "Ensured profile directory structure exists: \$FIREFOX_PROFILE_ROOT"
 
 # Create a default profile directory with a random name to avoid conflicts
 PROFILE_NAME="kiosk-\$(head /dev/urandom | tr -dc a-z0-9 | head -c 8)"
-PROFILE_PATH_RELATIVE_TO_INI="\$PROFILE_NAME" # Path used in profiles.ini
-PROFILE_DIR_ABSOLUTE="\$PROFILE_BASE_DIR/.mozilla/firefox/\$PROFILE_NAME"
+PROFILE_PATH_RELATIVE_TO_INI="\$PROFILE_NAME" # Path used in profiles.ini, relative to FIREFOX_PROFILE_ROOT
+PROFILE_DIR_ABSOLUTE="\$FIREFOX_PROFILE_ROOT/\$PROFILE_NAME" # Absolute path to the profile data
 mkdir -p "\$PROFILE_DIR_ABSOLUTE"
 log_setup_message "Created new profile directory: \$PROFILE_DIR_ABSOLUTE"
 
 # Create profiles.ini file with modern format
-# The path to profiles.ini is always $PROFILE_BASE_DIR/.mozilla/firefox/profiles.ini
-# regardless of Flatpak or Snap, because PROFILE_BASE_DIR already points to the correct root
-# (e.g. /home/kiosk/.var/app/org.mozilla.firefox for flatpak, or /home/kiosk/snap/firefox/common for snap)
-PROFILES_INI_PATH="\$PROFILE_BASE_DIR/.mozilla/firefox/profiles.ini"
+# The path to profiles.ini is always $FIREFOX_PROFILE_ROOT/profiles.ini
+PROFILES_INI_PATH="\$FIREFOX_PROFILE_ROOT/profiles.ini"
 log_setup_message "Creating profiles.ini at: \$PROFILES_INI_PATH"
 
 cat > "\$PROFILES_INI_PATH" << EOL
@@ -310,15 +319,29 @@ EOL
 log_setup_message "Firefox preferences written to user.js."
 
 # Set correct permissions for the profile directory
-# The script setup_firefox_profile.sh is run by the kiosk user (via sudo)
-# So, KIOSK_USERNAME (which defaults to whoami) will be the kiosk user.
+# The script setup_firefox_profile.sh is run by the kiosk user (via sudo, but effective user for file ownership should be KIOSK_USERNAME_EFFECTIVE)
 # The entire .mozilla directory within $PROFILE_BASE_DIR should be owned by the kiosk user.
-log_setup_message "Setting ownership of \$PROFILE_BASE_DIR/.mozilla to \$KIOSK_USERNAME:\$KIOSK_USERNAME..."
-chown -R \$KIOSK_USERNAME:\$KIOSK_USERNAME "\$PROFILE_BASE_DIR/.mozilla"
-log_setup_message "Setting permissions for \$PROFILE_BASE_DIR/.mozilla to 700 (rwx------) recursively..."
-chmod -R 700 "\$PROFILE_BASE_DIR/.mozilla"
+log_setup_message "Setting ownership of \$FIREFOX_PROFILE_ROOT and its contents to \$KIOSK_USERNAME_EFFECTIVE:\$KIOSK_USERNAME_EFFECTIVE..."
+chown -R \$KIOSK_USERNAME_EFFECTIVE:\$KIOSK_USERNAME_EFFECTIVE "\$FIREFOX_PROFILE_ROOT"
+log_setup_message "Setting permissions for \$FIREFOX_PROFILE_ROOT and its contents to 700 (rwx------) recursively..."
+chmod -R 700 "\$FIREFOX_PROFILE_ROOT"
 
-log_setup_message "Firefox profile setup complete for user \$KIOSK_USERNAME."
+# If PROFILE_BASE_DIR is different from KIOSK_USER_HOME_DIR (e.g. for Flatpak/Snap), ensure its parent components are also owned by user.
+# Example: /home/kiosk/.var/app/org.mozilla.firefox/.mozilla -> ensure /home/kiosk/.var and /home/kiosk/.var/app are also owned.
+# This is generally handled by the parent firefox.sh script when creating these base dirs.
+if [ "\$PROFILE_BASE_DIR" != "\$KIOSK_USER_HOME_DIR" ]; then
+    # This ensures the containing directory (e.g. .../org.mozilla.firefox/ or .../snap/firefox/common/) is also owned by the user.
+    # The .mozilla directory itself is handled by the chown/chmod above.
+    # We need to ensure the parent of .mozilla (which is $PROFILE_BASE_DIR) is also correctly permissioned if it's not the home dir.
+    if [ -d "\$PROFILE_BASE_DIR" ]; then # Check if PROFILE_BASE_DIR itself exists
+      log_setup_message "Setting ownership of profile base \$PROFILE_BASE_DIR to \$KIOSK_USERNAME_EFFECTIVE:\$KIOSK_USERNAME_EFFECTIVE..."
+      chown \$KIOSK_USERNAME_EFFECTIVE:\$KIOSK_USERNAME_EFFECTIVE "\$PROFILE_BASE_DIR" # Non-recursive for the base itself
+      chmod 700 "\$PROFILE_BASE_DIR" # rwx------ for the base itself
+    fi
+fi
+
+
+log_setup_message "Firefox profile setup complete for user \$KIOSK_USERNAME_EFFECTIVE."
 EOF
 
 chmod +x "$FIREFOX_PROFILE_SCRIPT"

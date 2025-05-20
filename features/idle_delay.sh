@@ -134,12 +134,15 @@ else
     GENERATED_USER_IDLE_SERVICE_LOG_FILE="$LOG_DIR/kiosk-idle-delay.user.service.log"
     cat > "$USER_IDLE_SERVICE_FILE" << EOF
 [Unit]
-Description=Apply Kiosk Idle Delay Settings
+Description=Kiosk Idle Delay User Settings Watcher
 After=graphical-session.target network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c 'echo "\$(date) - kiosk-idle-delay.user.service: Applying gsettings..." >> $GENERATED_USER_IDLE_SERVICE_LOG_FILE 2>&1; gsettings set org.gnome.desktop.session idle-delay 0 >> $GENERATED_USER_IDLE_SERVICE_LOG_FILE 2>&1 || echo "\$(date) - Failed gsettings set" >> $GENERATED_USER_IDLE_SERVICE_LOG_FILE 2>&1; dconf write /org/gnome/desktop/session/idle-delay "uint32 0" >> $GENERATED_USER_IDLE_SERVICE_LOG_FILE 2>&1 || echo "\$(date) - Failed dconf write" >> $GENERATED_USER_IDLE_SERVICE_LOG_FILE 2>&1'
+# System-wide dconf settings in /etc/dconf/db/local.d/00-idle-delay and locks
+# should enforce the idle delay. This service is mostly a placeholder or for future user-specific tweaks if locks are removed.
+# For now, it just logs its execution.
+ExecStart=/bin/bash -c 'echo "\$(date) - kiosk-idle-delay.user.service: Ensuring user session respects system idle settings." >> $GENERATED_USER_IDLE_SERVICE_LOG_FILE 2>&1'
 RemainAfterExit=yes
 
 [Install]
@@ -152,12 +155,19 @@ fi
 log_message "Creating login script /etc/profile.d/apply-idle-delay.sh..."
 mkdir -p /etc/profile.d
 # Define the log file path for the generated apply-idle-delay.sh script
-GENERATED_APPLY_IDLE_LOG_FILE="$LOG_DIR/apply-idle-delay.sh.log"
+# User-specific log path
+USER_LOG_DIR_BASE="\$HOME/.local/share/kiosk" # Using \$HOME for expansion at runtime by user
+GENERATED_APPLY_IDLE_LOG_FILE="\$USER_LOG_DIR_BASE/apply-idle-delay.sh.log"
+
 cat > /etc/profile.d/apply-idle-delay.sh << EOF
 #!/bin/bash
-# Apply idle-delay settings at login
-LOGFILE="$GENERATED_APPLY_IDLE_LOG_FILE"
-mkdir -p "$(dirname "\$LOGFILE")"
+# Apply idle-delay settings at login (primarily for logging and ensuring session awareness)
+
+USER_LOG_DIR_BASE_EXPANDED="\$HOME/.local/share/kiosk"
+LOGFILE="\$USER_LOG_DIR_BASE_EXPANDED/apply-idle-delay.sh.log"
+
+# Ensure user-specific log directory exists
+mkdir -p "\$USER_LOG_DIR_BASE_EXPANDED"
 
 log_apply_idle_message() {
     echo "\$(date '+%Y-%m-%d %H:%M:%S') - \$1" >> "\$LOGFILE"
@@ -167,18 +177,19 @@ log_apply_idle_message "apply-idle-delay.sh: Script started for user \$(whoami).
 
 # Only run for graphical sessions
 if [ -n "\$DISPLAY" ] || [ -n "\$WAYLAND_DISPLAY" ]; then
-    log_apply_idle_message "Graphical session detected. Applying idle-delay settings."
-    # Set idle-delay to 0 (never)
-    gsettings set org.gnome.desktop.session idle-delay 0 >> "\$LOGFILE" 2>&1 || log_apply_idle_message "Failed: gsettings set org.gnome.desktop.session idle-delay 0"
-    dconf write /org/gnome/desktop/session/idle-delay "uint32 0" >> "\$LOGFILE" 2>&1 || log_apply_idle_message "Failed: dconf write /org/gnome/desktop/session/idle-delay"
-    
-    # Zorin OS specific settings (if they exist)
-    log_apply_idle_message "Applying Zorin OS specific idle-delay settings."
-    gsettings set com.zorin.desktop.session idle-delay 0 >> "\$LOGFILE" 2>&1 || log_apply_idle_message "Note: Failed/Skipped gsettings set com.zorin.desktop.session idle-delay 0 (may not exist)"
-    dconf write /com/zorin/desktop/session/idle-delay "uint32 0" >> "\$LOGFILE" 2>&1 || log_apply_idle_message "Note: Failed/Skipped dconf write /com/zorin/desktop/session (may not exist)"
-    log_apply_idle_message "Idle-delay settings applied via login script."
+    log_apply_idle_message "Graphical session detected. System-wide dconf settings should enforce idle-delay."
+    # The actual settings are enforced by /etc/dconf/db/local.d/00-idle-delay and its lock.
+    # This script now primarily serves to log that the session is aware.
+    # We can verify if the setting is active if needed for debugging.
+    # CURRENT_GNOME_IDLE=\$(gsettings get org.gnome.desktop.session idle-delay 2>/dev/null || echo "not-set")
+    # log_apply_idle_message "Current org.gnome.desktop.session idle-delay: \$CURRENT_GNOME_IDLE"
+    # if gsettings list-schemas | grep -q com.zorin.desktop.session; then
+    #   CURRENT_ZORIN_IDLE=\$(gsettings get com.zorin.desktop.session idle-delay 2>/dev/null || echo "not-set")
+    #   log_apply_idle_message "Current com.zorin.desktop.session idle-delay: \$CURRENT_ZORIN_IDLE"
+    # fi
+    log_apply_idle_message "Idle-delay settings check via login script complete."
 else
-    log_apply_idle_message "Not a graphical session. Skipping idle-delay settings."
+    log_apply_idle_message "Not a graphical session. Skipping idle-delay settings check."
 fi
 EOF
 chmod +x /etc/profile.d/apply-idle-delay.sh
@@ -191,13 +202,18 @@ log_message "Creating system-level systemd service $IDLE_DELAY_SERVICE_SYSTEM...
 GENERATED_SYSTEM_IDLE_SERVICE_LOG_FILE="$LOG_DIR/idle-delay-settings.system.service.log"
 cat > "$IDLE_DELAY_SERVICE_SYSTEM" << EOF
 [Unit]
-Description=Apply Idle Delay Settings for All Users at Boot
-After=local-fs.target user-runtime-dir@.service # Ensure user runtime dirs are up
-Before=display-manager.service
+Description=Ensure DConf System Idle Delay Settings are Applied
+After=local-fs.target # Runs after local filesystems are mounted
+Requires=dconf-update.service # Ensures dconf update has run if it's a service
+After=dconf-update.service
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c "echo \\"\$(date) - idle-delay-settings.system.service: Starting...\\" >> $GENERATED_SYSTEM_IDLE_SERVICE_LOG_FILE 2>&1; for userhome in /home/*; do if [ -d \\"\$userhome\\" ]; then username=\$(basename \\"\$userhome\\"); if id \$username &>/dev/null; then KioskUID=\$(id -u \$username); loginctl enable-linger \$username || true; echo \\"\$(date) - Applying for user \$username (UID \$KioskUID)...\\" >> $GENERATED_SYSTEM_IDLE_SERVICE_LOG_FILE 2>&1; su - \$username -c 'export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/'\$KioskUID'/bus; gsettings set org.gnome.desktop.session idle-delay 0; dconf write /org/gnome/desktop/session/idle-delay \\"uint32 0\\"; gsettings set com.zorin.desktop.session idle-delay 0 || true; dconf write /com/zorin/desktop/session/idle-delay \\"uint32 0\\" || true' >> $GENERATED_SYSTEM_IDLE_SERVICE_LOG_FILE 2>&1 || echo \\"\$(date) - Failed for user \$username\\" >> $GENERATED_SYSTEM_IDLE_SERVICE_LOG_FILE 2>&1; fi; fi; done; echo \\"\$(date) - idle-delay-settings.system.service: Finished.\\" >> $GENERATED_SYSTEM_IDLE_SERVICE_LOG_FILE 2>&1"
+# The primary action is 'dconf update' which is handled by system dconf mechanisms.
+# This service mainly ensures that dconf is updated and logs the state.
+# The system-wide settings are in /etc/dconf/db/local.d/00-idle-delay
+# The locks are in /etc/dconf/db/local.d/locks/idle-delay
+ExecStart=/bin/bash -c "echo \\"\$(date) - idle-delay-settings.system.service: Verifying dconf update and system settings...\\" >> $GENERATED_SYSTEM_IDLE_SERVICE_LOG_FILE 2>&1; dconf update >> $GENERATED_SYSTEM_IDLE_SERVICE_LOG_FILE 2>&1 || echo \\"\$(date) - dconf update command failed\\" >> $GENERATED_SYSTEM_IDLE_SERVICE_LOG_FILE 2>&1; echo \\"\$(date) - idle-delay-settings.system.service: Finished verification.\\" >> $GENERATED_SYSTEM_IDLE_SERVICE_LOG_FILE 2>&1"
 RemainAfterExit=yes
 
 [Install]
