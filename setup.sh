@@ -168,7 +168,8 @@ script_names=(
     "uninstall.sh"
 )
 # Initial states for all features (0 = OFF, 1 = ON)
-states=(1 1 1 1 1 1 0 1 1 1 0 0 0)  # Default all features ON, uninstall OFF
+# Indices 0-5 are features, index 6 is Uninstall.
+states=(1 1 1 1 1 1 0)  # Default first 6 features ON, uninstall (index 6) OFF
 selected=0
 total_items=${#menu_items[@]}
 feature_count=$((total_items-2))  # Number of actual features (excluding Run All and Cancel)
@@ -185,7 +186,7 @@ draw_menu() {
         if [ $i -eq $selected ]; then
             tput setaf 2  # Green for selected item
             if [ $i -lt $feature_count ]; then  # Only show state for features
-                if [ $i -eq 10 ]; then  # Uninstall option
+                if [ $i -eq 6 ]; then  # Uninstall option is at index 6
                     if [ "${states[$i]}" -eq 1 ]; then
                         tput setaf 1  # Red for uninstall when ON
                         echo "> ${menu_items[$i]} [ON]"
@@ -205,7 +206,7 @@ draw_menu() {
             tput sgr0     # Reset color
         else
             if [ $i -lt $feature_count ]; then
-                if [ $i -eq 10 ]; then  # Uninstall option
+                if [ $i -eq 6 ]; then  # Uninstall option is at index 6
                     if [ "${states[$i]}" -eq 1 ]; then
                         tput setaf 1  # Red for uninstall when ON
                         echo "  ${menu_items[$i]} [ON]"
@@ -252,7 +253,7 @@ run_single_feature() {
     echo "--------------------------------"
     
     # Special handling for uninstall feature
-    if [ $selected -eq 10 ]; then  # Uninstall is at index 10
+    if [ $selected -eq 6 ]; then  # Uninstall is at index 6
         if [ ${states[$selected]} -eq 1 ]; then
             script_path="features/${script_names[$selected]}"
             log_message "Running uninstall: ${menu_items[$selected]}" "INFO"

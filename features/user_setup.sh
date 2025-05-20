@@ -23,7 +23,7 @@ echo "[DEBUG] Script is running as root, continuing"
 echo "[DEBUG] Checking for environment file"
 if [ -z "$ENV_FILE" ]; then
   # Look for the environment file next to kiosk_setup.sh
-  ENV_FILE="$(dirname "$0")/../.env"
+  ENV_FILE="$(dirname "$0")/../a"
   echo "[DEBUG] ENV_FILE not defined, using default: $ENV_FILE"
   
   # If not found, try looking in the same directory as kiosk_setup.sh
