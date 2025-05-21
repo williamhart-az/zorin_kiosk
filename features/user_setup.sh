@@ -150,9 +150,13 @@ log_init_kiosk_message "User directories created/ensured."
 log_init_kiosk_message "Using template directory: \$TEMPLATE_DIR_EXPANDED"
 
 # Run Firefox profile setup script
+log_init_kiosk_message "Waiting a few seconds before Firefox profile setup to allow desktop to settle..."
+sleep 5
 log_init_kiosk_message "Running Firefox profile setup script: sudo \$OPT_KIOSK_DIR_EXPANDED/setup_firefox_profile.sh"
 sudo \$OPT_KIOSK_DIR_EXPANDED/setup_firefox_profile.sh >> "\$LOGFILE" 2>&1
 log_init_kiosk_message "Firefox profile setup completed."
+log_init_kiosk_message "Waiting a few seconds after Firefox profile setup..."
+sleep 3
 
 # Copy desktop shortcuts if they exist
 if [ -d "\$TEMPLATE_DIR_EXPANDED/Desktop" ]; then

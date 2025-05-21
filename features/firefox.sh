@@ -206,6 +206,58 @@ elif [ "\$FIREFOX_INSTALL_TYPE" = "snap" ]; then
   # So PROFILE_BASE_DIR should be its parent: /home/user/snap/firefox/common
   PROFILE_BASE_DIR="\$(dirname "\$SNAP_FIREFOX_PROFILE_PARENT_DIR_IN_GENERATED_SCRIPT")"
   log_setup_message "Using Snap profile base: \$PROFILE_BASE_DIR"
+
+  # Define policies path for Snap
+  POLICIES_DIR="\$KIOSK_USER_HOME_DIR/snap/firefox/common/distribution"
+  POLICIES_FILE="\$POLICIES_DIR/policies.json"
+
+  log_setup_message "Creating Firefox policies directory for Snap: \$POLICIES_DIR..."
+  mkdir -p "\$POLICIES_DIR"
+
+  log_setup_message "Creating policies.json for Snap Firefox at: \$POLICIES_FILE..."
+  cat > "\$POLICIES_FILE" << EOPOLICY
+{
+  "policies": {
+    "BlockAboutConfig": true,
+    "Homepage": {
+      "URL": "$HOMEPAGE_EXPANDED",
+      "Locked": true,
+      "Additional": [],
+      "StartPage": "homepage"
+    },
+    "DisableAppUpdate": true,
+    "DisableFirefoxStudies": true,
+    "DisableTelemetry": true,
+    "DisablePocket": true,
+    "OfferToSaveLogins": false,
+    "SanitizeOnShutdown": {
+        "Cache": true,
+        "Cookies": true,
+        "Downloads": true,
+        "FormData": true,
+        "History": true,
+        "Sessions": true,
+        "OfflineApps": true,
+        "SiteSettings": true
+    },
+    "DisplayBookmarksToolbar": false,
+    "DisableFirefoxScreenshots": true,
+    "OverrideFirstRunPage": "",
+    "OverridePostUpdatePage": "",
+    "DontCheckDefaultBrowser": true
+  }
+}
+EOPOLICY
+  log_setup_message "policies.json created for Snap."
+
+  log_setup_message "Setting ownership of Snap policies directory \$POLICIES_DIR and contents to \$KIOSK_USERNAME_EFFECTIVE..."
+  chown -R \$KIOSK_USERNAME_EFFECTIVE:\$KIOSK_USERNAME_EFFECTIVE "\$POLICIES_DIR"
+  log_setup_message "Setting permissions for Snap policies directory \$POLICIES_DIR to 700 and policies.json to 600..."
+  chmod 700 "\$POLICIES_DIR"
+  if [ -f "\$POLICIES_FILE" ]; then
+      chmod 600 "\$POLICIES_FILE"
+  fi
+
 else # Standard
   PROFILE_BASE_DIR="\$KIOSK_USER_HOME_DIR" # .mozilla will be appended later
   log_setup_message "Using Standard profile base (parent of .mozilla): \$PROFILE_BASE_DIR"
@@ -255,8 +307,10 @@ HOMEPAGE_EXPANDED="$HOMEPAGE"
 
 # Create user.js file to suppress first-run wizard and set preferences
 USER_JS_FILE="\$PROFILE_DIR_ABSOLUTE/user.js"
-log_setup_message "Creating user.js at: \$USER_JS_FILE"
-cat > "\$USER_JS_FILE" << EOL
+
+if [ "\$FIREFOX_INSTALL_TYPE" != "snap" ]; then
+  log_setup_message "Creating user.js at: \$USER_JS_FILE (for non-Snap)"
+  cat > "\$USER_JS_FILE" << EOL
 // Set homepage
 user_pref("browser.startup.homepage", "\$HOMEPAGE_EXPANDED");
 user_pref("browser.startup.page", 1);
@@ -316,7 +370,10 @@ user_pref("extensions.pocket.enabled", false);
 // Disable password saving prompts
 user_pref("signon.rememberSignons", false);
 EOL
-log_setup_message "Firefox preferences written to user.js."
+  log_setup_message "Firefox preferences written to user.js."
+else
+  log_setup_message "Skipping user.js creation for Snap as policies.json is used."
+fi
 
 # Set correct permissions for the profile directory
 # The script setup_firefox_profile.sh is run by the kiosk user (via sudo, but effective user for file ownership should be KIOSK_USERNAME_EFFECTIVE)
