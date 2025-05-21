@@ -1,0 +1,9 @@
+Tue May 20 05:07:26 PM MST 2025 - kiosk-home-init.service: Starting initialization for kiosk...
+cp: cannot stat '/opt/kiosk/templates/Desktop/*': No such file or directory
+Tue May 20 05:07:26 PM MST 2025 - kiosk-home-init.service: No Desktop entries to copy or error.
+cp: cannot stat '/opt/kiosk/templates/Documents/*': No such file or directory
+Tue May 20 05:07:26 PM MST 2025 - kiosk-home-init.service: No Documents to copy or error.
+Tue May 20 05:07:26 PM MST 2025 - kiosk-home-init.service: Running setup_firefox_profile.sh...
+Tue May 20 05:07:27 PM MST 2025 - kiosk-home-init.service: Enabling kiosk-user-settings.service for user kiosk...
+Created symlink /home/kiosk/.config/systemd/user/graphical-session.target.wants/kiosk-idle-delay.service → /home/kiosk/.config/systemd/user/kiosk-idle-delay.service.
+Tue May 20 05:07:27 PM MST 2025 - kiosk-home-init.service: Initialization complete for kiosk.

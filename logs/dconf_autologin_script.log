@@ -1,0 +1,21 @@
+2025-05-20 17:06:22 - Starting dconf_autologin script for user kiosk...
+2025-05-20 17:06:22 - D-Bus session found at /run/user/1001/bus, exported DBUS_SESSION_BUS_ADDRESS.
+2025-05-20 17:06:22 - Attempting to write dconf: Path=/org/gnome/login-screen/enable-auto-login, Value=true
+2025-05-20 17:06:22 - Schema /org/gnome/ exists.
+2025-05-20 17:06:22 - Successfully set dconf: /org/gnome/login-screen/enable-auto-login to true
+2025-05-20 17:06:22 - Attempting to write dconf: Path=/org/gnome/login-screen/auto-login-user, Value='kiosk'
+2025-05-20 17:06:22 - Schema /org/gnome/ exists.
+2025-05-20 17:06:22 - Successfully set dconf: /org/gnome/login-screen/auto-login-user to 'kiosk'
+2025-05-20 17:06:22 - Attempting to write dconf: Path=/com/zorin/desktop/login-screen/enable-auto-login, Value=true
+2025-05-20 17:06:22 - Schema /com/zorin/ exists.
+2025-05-20 17:06:22 - Successfully set dconf: /com/zorin/desktop/login-screen/enable-auto-login to true
+2025-05-20 17:06:22 - Attempting to write dconf: Path=/com/zorin/desktop/login-screen/auto-login-user, Value='kiosk'
+2025-05-20 17:06:22 - Schema /com/zorin/ exists.
+2025-05-20 17:06:22 - Successfully set dconf: /com/zorin/desktop/login-screen/auto-login-user to 'kiosk'
+2025-05-20 17:06:22 - Attempting to write dconf: Path=/org/gnome/desktop/lockdown/disable-lock-screen, Value=true
+2025-05-20 17:06:22 - Schema /org/gnome/ exists.
+2025-05-20 17:06:22 - Warning: Failed to set dconf: /org/gnome/desktop/lockdown/disable-lock-screen to true (Error code: 1). Key might not exist or wrong value type.
+2025-05-20 17:06:22 - Attempting to write dconf: Path=/org/gnome/desktop/screensaver/lock-enabled, Value=false
+2025-05-20 17:06:22 - Schema /org/gnome/ exists.
+2025-05-20 17:06:22 - Warning: Failed to set dconf: /org/gnome/desktop/screensaver/lock-enabled to false (Error code: 1). Key might not exist or wrong value type.
+2025-05-20 17:06:22 - dconf_autologin script finished.

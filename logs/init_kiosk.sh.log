@@ -1,0 +1,17 @@
+2025-05-20 17:07:31 - Initializing kiosk environment for user kiosk...
+2025-05-20 17:07:31 - Creating user directories...
+2025-05-20 17:07:31 - User directories created/ensured.
+2025-05-20 17:07:31 - Using template directory: /opt/kiosk/templates
+2025-05-20 17:07:31 - Running Firefox profile setup script: sudo /opt/kiosk/setup_firefox_profile.sh
+2025-05-20 17:07:31 - Firefox profile setup completed.
+2025-05-20 17:07:31 - Copying desktop shortcuts from template...
+2025-05-20 17:07:31 - No desktop shortcuts to copy or error during copy.
+2025-05-20 17:07:31 - Desktop shortcuts copied (or none found).
+2025-05-20 17:07:31 - Copying documents from template...
+2025-05-20 17:07:31 - No documents to copy or error during copy.
+2025-05-20 17:07:31 - Documents copied (or none found).
+2025-05-20 17:07:31 - Copying autostart entries from template...
+2025-05-20 17:07:31 - Autostart entries copied (or none found).
+2025-05-20 17:07:31 - Setting wallpaper using /opt/kiosk/set_wallpaper.sh
+2025-05-20 17:07:31 - Wallpaper set command executed.
+2025-05-20 17:07:31 - Kiosk environment initialized successfully.

@@ -1,0 +1,28 @@
+2025-05-20 17:07:26 - Starting setup_firefox_profile.sh for user kiosk...
+2025-05-20 17:07:26 - Flatpak Firefox (org.mozilla.firefox) detected via flatpak info.
+2025-05-20 17:07:26 - Firefox installation type: flatpak
+2025-05-20 17:07:26 - Using Flatpak profile base: /home/kiosk/.var/app/org.mozilla.firefox
+2025-05-20 17:07:26 - Ensured profile directory structure exists: /home/kiosk/.var/app/org.mozilla.firefox/.mozilla/firefox
+2025-05-20 17:07:27 - Created new profile directory: /home/kiosk/.var/app/org.mozilla.firefox/.mozilla/firefox/kiosk-9v1vwska
+2025-05-20 17:07:27 - Creating profiles.ini at: /home/kiosk/.var/app/org.mozilla.firefox/.mozilla/firefox/profiles.ini
+2025-05-20 17:07:27 - profiles.ini created with profile: kiosk-9v1vwska
+2025-05-20 17:07:27 - Creating user.js at: /home/kiosk/.var/app/org.mozilla.firefox/.mozilla/firefox/kiosk-9v1vwska/user.js
+2025-05-20 17:07:27 - Firefox preferences written to user.js.
+2025-05-20 17:07:27 - Setting ownership of /home/kiosk/.var/app/org.mozilla.firefox/.mozilla/firefox and its contents to kiosk:kiosk...
+2025-05-20 17:07:27 - Setting permissions for /home/kiosk/.var/app/org.mozilla.firefox/.mozilla/firefox and its contents to 700 (rwx------) recursively...
+2025-05-20 17:07:27 - Setting ownership of profile base /home/kiosk/.var/app/org.mozilla.firefox to kiosk:kiosk...
+2025-05-20 17:07:27 - Firefox profile setup complete for user kiosk.
+2025-05-20 17:07:31 - Starting setup_firefox_profile.sh for user kiosk...
+2025-05-20 17:07:31 - Flatpak Firefox (org.mozilla.firefox) detected via flatpak info.
+2025-05-20 17:07:31 - Firefox installation type: flatpak
+2025-05-20 17:07:31 - Using Flatpak profile base: /home/kiosk/.var/app/org.mozilla.firefox
+2025-05-20 17:07:31 - Ensured profile directory structure exists: /home/kiosk/.var/app/org.mozilla.firefox/.mozilla/firefox
+2025-05-20 17:07:31 - Created new profile directory: /home/kiosk/.var/app/org.mozilla.firefox/.mozilla/firefox/kiosk-t0un0nku
+2025-05-20 17:07:31 - Creating profiles.ini at: /home/kiosk/.var/app/org.mozilla.firefox/.mozilla/firefox/profiles.ini
+2025-05-20 17:07:31 - profiles.ini created with profile: kiosk-t0un0nku
+2025-05-20 17:07:31 - Creating user.js at: /home/kiosk/.var/app/org.mozilla.firefox/.mozilla/firefox/kiosk-t0un0nku/user.js
+2025-05-20 17:07:31 - Firefox preferences written to user.js.
+2025-05-20 17:07:31 - Setting ownership of /home/kiosk/.var/app/org.mozilla.firefox/.mozilla/firefox and its contents to kiosk:kiosk...
+2025-05-20 17:07:31 - Setting permissions for /home/kiosk/.var/app/org.mozilla.firefox/.mozilla/firefox and its contents to 700 (rwx------) recursively...
+2025-05-20 17:07:31 - Setting ownership of profile base /home/kiosk/.var/app/org.mozilla.firefox to kiosk:kiosk...
+2025-05-20 17:07:31 - Firefox profile setup complete for user kiosk.

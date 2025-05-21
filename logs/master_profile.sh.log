@@ -1,0 +1,10 @@
+2025-05-20 17:06:39 - Argument 'enable' received. Calling enable_feature.
+2025-05-20 17:06:39 - Starting enable_feature: Cloning Firefox profile for kiosk user...
+2025-05-20 17:06:39 - Source profile directory: /root/.mozilla/firefox
+2025-05-20 17:06:39 - Source profiles.ini: /root/.mozilla/firefox/profiles.ini
+2025-05-20 17:06:39 - Destination profile directory for kiosk user: /home/kiosk/.mozilla/firefox
+2025-05-20 17:06:39 - Creating destination directory if it doesn't exist: /home/kiosk/.mozilla/firefox
+2025-05-20 17:06:39 - enable_feature: Checking for source profile at /root/.mozilla/firefox/profiles.ini (typically /root/.mozilla/firefox/profiles.ini)
+2025-05-20 17:06:39 - Warning: Source profiles.ini not found at /root/.mozilla/firefox/profiles.ini. Cloning from root profile in enable_feature will be skipped.
+2025-05-20 17:06:39 - enable_feature: Finished (potentially problematic Firefox clone from root profile step has been modified/skipped).
+2025-05-20 17:06:39 - enable_feature completed.

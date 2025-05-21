@@ -1,0 +1,25 @@
+2025-05-20 17:06:38 - Script started: firefox.sh
+2025-05-20 17:06:38 - Running as root.
+2025-05-20 17:06:38 - Checking for environment file...
+2025-05-20 17:06:38 - ENV_FILE not defined, using default: features/../.env
+2025-05-20 17:06:38 - Checking if environment file exists at: features/../.env
+2025-05-20 17:06:38 - Sourcing environment file: features/../.env
+2025-05-20 17:06:38 - Environment file sourced successfully. KIOSK_USERNAME=kiosk, OPT_KIOSK_DIR=/opt/kiosk, HOMEPAGE=https://private-radar.com
+2025-05-20 17:06:38 - Kiosk user home directory set to: /home/kiosk
+2025-05-20 17:06:38 - Ensuring Firefox base directories are correctly permissioned for user kiosk...
+2025-05-20 17:06:38 - Created /home/kiosk/.var
+2025-05-20 17:06:38 - Set ownership and permissions for /home/kiosk/.var
+2025-05-20 17:06:38 - Created /home/kiosk/.var/app
+2025-05-20 17:06:38 - Set ownership and permissions for /home/kiosk/.var/app
+2025-05-20 17:06:38 - Created /home/kiosk/.var/app/org.mozilla.firefox
+2025-05-20 17:06:38 - Set ownership and permissions for /home/kiosk/.var/app/org.mozilla.firefox
+2025-05-20 17:06:38 - Created /home/kiosk/.mozilla
+2025-05-20 17:06:38 - Set ownership and permissions for /home/kiosk/.mozilla
+2025-05-20 17:06:38 - Created Snap Firefox profile parent directory: /home/kiosk/snap/firefox/common/.mozilla
+2025-05-20 17:06:38 - Set ownership and permissions for Snap's common directory part: /home/kiosk/snap/firefox/common
+2025-05-20 17:06:38 - Base directory setup for Firefox complete.
+2025-05-20 17:06:38 - Creating Firefox profile setup script at /opt/kiosk/setup_firefox_profile.sh...
+2025-05-20 17:06:38 - Firefox profile setup script /opt/kiosk/setup_firefox_profile.sh created and made executable.
+2025-05-20 17:06:38 - Creating sudoers entry for Firefox profile setup...
+2025-05-20 17:06:38 - Sudoers file /etc/sudoers.d/kiosk-firefox created with permissions 440.
+2025-05-20 17:06:38 - Script finished: firefox.sh

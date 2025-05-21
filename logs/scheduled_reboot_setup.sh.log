@@ -1,0 +1,21 @@
+2025-05-20 17:06:43 - Starting scheduled_reboot.sh script.
+2025-05-20 17:06:43 - Running as root.
+2025-05-20 17:06:43 - Checking for environment file...
+2025-05-20 17:06:43 - ENV_FILE not defined, using default: features/../.env
+2025-05-20 17:06:43 - Checking if environment file exists at: features/../.env
+2025-05-20 17:06:43 - Sourcing environment file: features/../.env
+2025-05-20 17:06:43 - Environment file sourced successfully. REBOOT_TIME=03:00, REBOOT_DAYS=all, OPT_KIOSK_DIR=/opt/kiosk
+2025-05-20 17:06:43 - Setting up scheduled system reboot...
+2025-05-20 17:06:43 - Scheduled reboot time: Hour=03, Minute=00
+2025-05-20 17:06:43 - Creating reboot action script at: /opt/kiosk/scheduled_reboot_action.sh
+2025-05-20 17:06:43 - Reboot action script /opt/kiosk/scheduled_reboot_action.sh created and made executable.
+2025-05-20 17:06:43 - Creating systemd service file: /etc/systemd/system/kiosk-reboot.service
+2025-05-20 17:06:43 - Creating systemd timer file: /etc/systemd/system/kiosk-reboot.timer
+2025-05-20 17:06:43 - Systemd service file /etc/systemd/system/kiosk-reboot.service created.
+2025-05-20 17:06:43 - Systemd timer file /etc/systemd/system/kiosk-reboot.timer created.
+2025-05-20 17:06:43 - Reloading systemd daemon...
+2025-05-20 17:06:44 - Enabling kiosk-reboot.timer...
+2025-05-20 17:06:44 - Starting kiosk-reboot.timer...
+2025-05-20 17:06:44 - Scheduled reboot configured for 03:00.
+2025-05-20 17:06:44 - System will reboot daily at 03:00.
+2025-05-20 17:06:44 - Scheduled reboot setup script finished.
