@@ -113,8 +113,9 @@ case "$1" in
         ;;
 esac
 
-log_message "Script finished."
-exit 0
+# Ensure the script continues to the main execution logic below,
+# rather than exiting prematurely. The "Script finished" log and exit 0
+# will be handled at the very end of the script's full execution.
 
 # Function to save admin changes to the template directory
 save_admin_changes() {
@@ -600,3 +601,5 @@ else
 fi
 
 log_message "Master profile feature setup complete."
+log_message "Script finished."
+exit 0
