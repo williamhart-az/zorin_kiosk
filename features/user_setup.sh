@@ -1144,6 +1144,8 @@ log_message "verify-autologin.service enabled."
 
 log_message "User setup script completed successfully"
 
+# Ensure script ends with a newline
+
 </file_content>
 
 Now that you have the latest state of the file, try the operation again with fewer, more precise SEARCH blocks. For large files especially, it may be prudent to try to limit yourself to <5 SEARCH/REPLACE blocks at a time, then wait for the user to respond with the result of the operation before following up with another replace_in_file call to make additional edits.

@@ -121,7 +121,7 @@ esac
 save_admin_changes() {
   # Log initialization
   ADMIN_SAVE_LOG_FILE="$LOG_DIR/admin_save.log" # Use the global LOG_DIR
-  local admin_log_message() {
+  admin_log_message() {
       echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$ADMIN_SAVE_LOG_FILE"
   }
   admin_log_message "Saving admin changes to template directory..."
